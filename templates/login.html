@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Login</title>
+</head>
+<body>
+
+<div class="container">
+    <h1>Acesso ao Sistema</h1>
+    <p class="subtle">
+        Professores acessam as reservas. A equipe de TI acessa tamb&eacute;m o painel interno e a gest&atilde;o de acessos.
+    </p>
+
+    {% if mensagem %}
+    <div class="alert alert-{{ tipo_mensagem }}">
+        <p>{{ mensagem }}</p>
+    </div>
+    {% endif %}
+
+    <form action="/login" method="post">
+        <input type="hidden" name="next" value="{{ proximo }}">
+
+        <label for="sigla">Sigla</label>
+        <input
+            type="text"
+            id="sigla"
+            name="sigla"
+            maxlength="3"
+            minlength="3"
+            pattern="[A-Za-z]{3}"
+            autocomplete="off"
+            placeholder="ABC"
+            title="Digite exatamente 3 letras."
+            oninput="this.value = this.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)"
+            required
+        >
+
+        <label for="senha">Senha</label>
+        <input type="password" id="senha" name="senha" minlength="4" required>
+
+        <button type="submit">Entrar</button>
+    </form>
+
+    {% if primeiro_acesso_disponivel %}
+    <p class="note">
+        Nenhum acesso da TI foi configurado ainda.
+        <a class="page-link" href="/primeiro-acesso">Fazer primeiro acesso</a>
+    </p>
+    {% endif %}
+</div>
+
+</body>
+</html>

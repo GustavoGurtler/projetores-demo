@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Gerenciar Acessos</title>
+</head>
+<body>
+
+<div class="page">
+
+<div class="container container-wide">
+    <div class="split-layout">
+    <aside class="link-row user-links">
+        <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
+        <a class="page-link" href="/">Tela de reservas</a>
+        <a class="page-link" href="/computadores">Solicitar computadores</a>
+        <a class="page-link" href="/computadores/consultar">Consultar computadores</a>
+        <a class="page-link" href="/painel-ti">Painel da TI</a>
+        <a class="page-link" href="/relatorio-ti">Relat&oacute;rio TI</a>
+        <a class="page-link" href="/computadores/relatorio-ti">Relat&oacute;rio TI Computadores</a>
+        <a class="page-link" href="/logout">Sair</a>
+    </aside>
+
+    <div class="split-main">
+    <h1>Gerenciar Acessos</h1>
+    <p class="subtle">
+        Cadastre os logins de professores e da equipe de TI. Cada acesso usa uma sigla de 3 letras e uma senha.
+    </p>
+    </div>
+    </div>
+</div>
+
+{% if mensagem %}
+<div class="container alert alert-{{ tipo_mensagem }}">
+    <p>{{ mensagem }}</p>
+</div>
+{% endif %}
+
+<div class="grid">
+    <section class="card">
+        <h2>Novo Acesso</h2>
+        <form action="/usuarios" method="post">
+            <label for="sigla">Sigla</label>
+            <input
+                type="text"
+                id="sigla"
+                name="sigla"
+                maxlength="3"
+                minlength="3"
+                pattern="[A-Za-z]{3}"
+                autocomplete="off"
+                placeholder="ABC"
+                title="Digite exatamente 3 letras."
+                oninput="this.value = this.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)"
+                required
+            >
+
+            <label for="senha">Senha</label>
+            <input type="password" id="senha" name="senha" minlength="4" required>
+
+            <label for="tipo">Tipo de Acesso</label>
+            <select id="tipo" name="tipo" required>
+                {% for tipo, label in tipos_usuario.items() %}
+                <option value="{{ tipo }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+
+            <button type="submit">Salvar acesso</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2>Usu&aacute;rios Cadastrados</h2>
+
+        {% if usuarios %}
+        <div class="table-wrap">
+            <table>
+                <tr>
+                    <th>Sigla</th>
+                    <th>Tipo</th>
+                </tr>
+                {% for usuario in usuarios %}
+                <tr>
+                    <td>{{ usuario.sigla }}</td>
+                    <td>{{ usuario.tipo_label }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">Nenhum acesso cadastrado ainda.</p>
+        {% endif %}
+    </section>
+</div>
+
+</div>
+
+</body>
+</html>

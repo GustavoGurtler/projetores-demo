@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Editar Reserva</title>
+</head>
+<body>
+
+<div class="container container-wide">
+    <div class="split-layout">
+    <aside class="link-row user-links">
+        <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
+        <a class="page-link" href="{{ proximo }}">Voltar</a>
+        <a class="page-link" href="/computadores">Solicitar computadores</a>
+        <a class="page-link" href="/computadores/consultar">Consultar computadores</a>
+        {% if usuario_eh_ti %}
+        <a class="page-link" href="/relatorio-ti">Relat&oacute;rio TI</a>
+        <a class="page-link" href="/computadores/relatorio-ti">Relat&oacute;rio TI Computadores</a>
+        {% endif %}
+        <a class="page-link" href="/logout">Sair</a>
+    </aside>
+
+    <div class="split-main">
+    <h1>Editar Reserva</h1>
+    <p class="subtle">
+        Ajuste os dados desta reserva. Apenas o professor que criou o registro ou a equipe de TI pode salvar altera&ccedil;&otilde;es.
+    </p>
+
+    {% if mensagem %}
+    <div class="alert alert-{{ tipo_mensagem }}">
+        <p>{{ mensagem }}</p>
+    </div>
+    {% endif %}
+
+    <form action="{{ url_for('editar_reserva', reserva_id=reserva.id) }}" method="post">
+        <input type="hidden" name="next" value="{{ proximo }}">
+
+        <label for="sigla">Sigla do Respons&aacute;vel</label>
+        <input
+            type="text"
+            id="sigla"
+            value="{{ reserva.sigla }}"
+            readonly
+        >
+
+        <label for="nivel">Curso</label>
+        <select name="nivel" id="nivel" onchange="atualizarFormulario()" required>
+            {% for chave, label in niveis.items() %}
+            <option value="{{ chave }}" {% if reserva_form.nivel == chave %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <div id="somDiv">
+            <label for="som">Vai precisar de som?</label>
+            <select name="som" id="som">
+                <option value="Sim" {% if reserva_form.som == 'Sim' %}selected{% endif %}>Sim</option>
+                <option value="N&atilde;o" {% if reserva_form.som != 'Sim' %}selected{% endif %}>N&atilde;o</option>
+            </select>
+        </div>
+
+        <label for="sala">Sala</label>
+        <select
+            name="sala"
+            id="sala"
+            data-selected="{{ reserva_form.sala }}"
+            required
+        ></select>
+
+        <label for="data">Data</label>
+        <input type="date" name="data" id="data" value="{{ reserva_form.data }}" required>
+
+        <label for="horario">Hor&aacute;rio</label>
+        <select
+            name="horario"
+            id="horario"
+            data-selected="{{ reserva_form.horario }}"
+            required
+        ></select>
+
+        <button type="submit">Salvar altera&ccedil;&otilde;es</button>
+    </form>
+
+    <div class="link-row">
+        <a class="page-link" href="{{ proximo }}">Cancelar edi&ccedil;&atilde;o</a>
+    </div>
+    </div>
+    </div>
+</div>
+
+<script>
+const salasPorNivel = {{ salas | tojson | safe }};
+const horariosPorNivel = {{ horarios | tojson | safe }};
+
+function preencherSelect(select, opcoes, chaveSelecionada, textoFn) {
+    select.innerHTML = "";
+
+    opcoes.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.valor;
+        option.textContent = textoFn(item);
+        option.selected = item.valor === chaveSelecionada;
+        select.appendChild(option);
+    });
+
+    if (!select.value && select.options.length) {
+        select.selectedIndex = 0;
+    }
+}
+
+function atualizarFormulario() {
+    const nivel = document.getElementById("nivel").value;
+    const sala = document.getElementById("sala");
+    const horario = document.getElementById("horario");
+    const somDiv = document.getElementById("somDiv");
+    const som = document.getElementById("som");
+    const salaSelecionada = sala.value || sala.dataset.selected;
+    const horarioSelecionado = horario.value || horario.dataset.selected;
+
+    const salasNivel = Object.entries(salasPorNivel[nivel] || {}).map(([valor, label]) => ({ valor, label }));
+    const horariosNivel = (horariosPorNivel[nivel] || []).map((item) => ({
+        valor: item.inicio,
+        label: `${item.label} (${item.inicio} - ${item.fim})`
+    }));
+
+    preencherSelect(sala, salasNivel, salaSelecionada, (item) => item.label);
+    preencherSelect(horario, horariosNivel, horarioSelecionado, (item) => item.label);
+
+    somDiv.style.display = nivel === "Fundamental" ? "block" : "none";
+    if (nivel !== "Fundamental") {
+        som.value = "N\u00e3o";
+    }
+
+    sala.dataset.selected = sala.value;
+    horario.dataset.selected = horario.value;
+}
+
+window.addEventListener("load", atualizarFormulario);
+</script>
+
+</body>
+</html>

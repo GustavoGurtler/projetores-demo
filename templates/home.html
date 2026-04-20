@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Nova Solicitação</title>
+</head>
+<body>
+
+<div class="container container-wide">
+<div class="split-layout">
+<aside class="link-row user-links">
+    <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
+    <a class="page-link" href="/reservas?data={{ data_hoje }}">Ver reservas do dia</a>
+    <a class="page-link" href="/computadores">Solicitar computadores</a>
+    <a class="page-link" href="/computadores/consultar?data={{ data_hoje }}">Consultar computadores</a>
+    {% if usuario_eh_ti %}
+    <a class="page-link" href="/painel-ti?data={{ data_hoje }}">Painel da TI</a>
+    <a class="page-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">Relat&oacute;rio TI</a>
+    <a class="page-link" href="/computadores/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">Relat&oacute;rio TI Computadores</a>
+    <a class="page-link" href="/usuarios">Gerenciar acessos</a>
+    {% endif %}
+    <a class="page-link" href="/logout">Sair</a>
+</aside>
+
+<div class="split-main">
+<h1>Nova Solicita&ccedil;&atilde;o</h1>
+<p class="subtle">
+    Reserve projetor, solicite computadores ou fa&ccedil;a os dois no mesmo fluxo.
+</p>
+
+{% if mensagem %}
+<div class="alert alert-{{ tipo_mensagem }}">
+    <p>{{ mensagem }}</p>
+</div>
+{% endif %}
+
+<form action="/reservar" method="post">
+
+<label for="sigla">Sigla do Professor</label>
+<input
+    type="text"
+    id="sigla"
+    value="{{ usuario_sigla }}"
+    readonly
+>
+
+<label for="nivel">Curso</label>
+<select name="nivel" id="nivel" onchange="atualizarTela()">
+    <option value="Fundamental">Ensino Fundamental</option>
+    <option value="Medio">Ensino M&eacute;dio</option>
+</select>
+
+<label for="data">Data</label>
+<input type="date" name="data" id="data" value="{{ data_hoje }}" onchange="atualizarTela()" required>
+
+<div class="toggle-grid">
+    <label class="checkbox-option toggle-option">
+        <input type="checkbox" name="incluir_projetor" id="incluir_projetor" checked onchange="atualizarTela()">
+        <span>Preciso de projetor</span>
+        <small>Reserva de projetor para a sala escolhida.</small>
+    </label>
+
+    <label class="checkbox-option toggle-option">
+        <input type="checkbox" name="incluir_computador" id="incluir_computador" onchange="atualizarTela()">
+        <span>Preciso de computador</span>
+        <small>Solicita notebook, chromebook ou Sala 15 no mesmo envio.</small>
+    </label>
+</div>
+
+<section class="form-section" id="secaoProjetor">
+    <h2 class="section-title">Projetor</h2>
+
+    <div id="somDiv">
+        <label for="som">Vai precisar de som?</label>
+        <select name="som" id="som">
+            <option value="Sim">Sim</option>
+            <option value="N&atilde;o">N&atilde;o</option>
+        </select>
+    </div>
+
+    <label for="sala">Sala do projetor</label>
+    <select name="sala" id="sala" onchange="atualizarAulas()"></select>
+</section>
+
+<section class="form-section" id="secaoComputador">
+    <h2 class="section-title">Computador</h2>
+
+    <label for="recurso_computador">Recurso</label>
+    <select name="recurso_computador" id="recurso_computador" onchange="atualizarTela()">
+        {% for chave, recurso in recursos_computadores.items() %}
+        <option value="{{ chave }}">{{ recurso.label }}</option>
+        {% endfor %}
+    </select>
+
+    <div id="quantidadeComputadorDiv">
+        <label for="quantidade_computador">Quantidade</label>
+        <input type="number" name="quantidade_computador" id="quantidade_computador" min="1" value="1" oninput="atualizarAulas()">
+    </div>
+    <p id="capacidadeComputadorInfo" class="subtle compact-text inline-note"></p>
+
+    <div id="localComputadorDiv">
+        <label for="local_computador">Local dos computadores</label>
+        <select name="local_computador" id="local_computador" onchange="atualizarAulas()"></select>
+    </div>
+</section>
+
+<label>Aulas</label>
+<div id="aulas"></div>
+
+<button type="submit">Salvar solicita&ccedil;&atilde;o</button>
+
+</form>
+
+<p class="note">
+    Quando os dois recursos est&atilde;o marcados, a aula s&oacute; fica dispon&iacute;vel se projetor e computador puderem ser atendidos juntos. Para computadores, cada reserva permite at&eacute; 15 unidades.
+</p>
+
+{% if usuario_eh_ti %}
+<div class="internal-access">
+    <p class="subtle">
+        Uso interno da equipe de TI:
+        <a class="page-link subtle-link" href="/painel-ti?data={{ data_hoje }}">abrir painel operacional</a>
+        |
+        <a class="page-link subtle-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">abrir relat&oacute;rio</a>
+        |
+        <a class="page-link subtle-link" href="/computadores/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">relat&oacute;rio de computadores</a>
+        |
+        <a class="page-link subtle-link" href="/usuarios">gerenciar acessos</a>
+    </p>
+</div>
+{% endif %}
+
+</div>
+</div>
+
+</div>
+
+<script>
+const disponibilidadeProjetor = {{ dados | tojson | safe }};
+const salasOcupadas = {{ salas_ocupadas | tojson | safe }};
+const disponibilidadeComputadores = {{ dados_computadores | tojson | safe }};
+const locaisComputadoresOcupados = {{ locais_computadores_ocupados | tojson | safe }};
+const horarios = {{ horarios | tojson | safe }};
+const salasPorNivel = {{ salas | tojson | safe }};
+const recursosComputadores = {{ recursos_computadores | tojson | safe }};
+
+function preencherSelect(select, opcoes, valorSelecionado) {
+    select.innerHTML = "";
+
+    opcoes.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item[0];
+        option.text = item[1];
+        option.selected = item[0] === valorSelecionado;
+        select.appendChild(option);
+    });
+
+    if (!select.value && select.options.length) {
+        select.selectedIndex = 0;
+    }
+}
+
+function recursoComputadorAtual() {
+    return recursosComputadores[document.getElementById("recurso_computador").value];
+}
+
+function atualizarTela() {
+    const nivel = document.getElementById("nivel").value;
+    const incluirProjetor = document.getElementById("incluir_projetor").checked;
+    const incluirComputador = document.getElementById("incluir_computador").checked;
+    const secaoProjetor = document.getElementById("secaoProjetor");
+    const secaoComputador = document.getElementById("secaoComputador");
+    const sala = document.getElementById("sala");
+    const localComputador = document.getElementById("local_computador");
+    const somDiv = document.getElementById("somDiv");
+    const salaSelecionadaAtual = sala.value;
+    const localSelecionadoAtual = localComputador.value || salaSelecionadaAtual;
+    const recurso = recursoComputadorAtual();
+    const quantidadeDiv = document.getElementById("quantidadeComputadorDiv");
+    const quantidadeInput = document.getElementById("quantidade_computador");
+    const capacidadeInfo = document.getElementById("capacidadeComputadorInfo");
+    const localComputadorDiv = document.getElementById("localComputadorDiv");
+
+    secaoProjetor.style.display = incluirProjetor ? "block" : "none";
+    secaoComputador.style.display = incluirComputador ? "block" : "none";
+
+    sala.required = incluirProjetor;
+    somDiv.style.display = incluirProjetor && nivel === "Fundamental" ? "block" : "none";
+
+    const salasNivel = Object.entries(salasPorNivel[nivel] || {});
+    preencherSelect(sala, salasNivel, salaSelecionadaAtual);
+
+    if (recurso.usa_sala) {
+        localComputadorDiv.style.display = "block";
+        preencherSelect(localComputador, salasNivel, localSelecionadoAtual || sala.value);
+        localComputador.required = incluirComputador;
+    } else {
+        localComputadorDiv.style.display = "none";
+        preencherSelect(localComputador, [[recurso.local_fixo, recurso.local_label]], recurso.local_fixo);
+        localComputador.required = false;
+    }
+
+    if (recurso.usa_quantidade) {
+        quantidadeDiv.style.display = "block";
+        quantidadeInput.max = recurso.max_por_reserva;
+        if (!quantidadeInput.value || Number(quantidadeInput.value) > recurso.max_por_reserva) {
+            quantidadeInput.value = Math.min(recurso.max_por_reserva, Math.max(1, Number(quantidadeInput.value) || 1));
+        }
+        quantidadeInput.required = incluirComputador;
+        capacidadeInfo.textContent = `Capacidade do recurso: ${recurso.capacidade_label}. Limite por reserva: ${recurso.max_por_reserva}.`;
+    } else {
+        quantidadeDiv.style.display = "none";
+        quantidadeInput.value = 1;
+        quantidadeInput.required = false;
+        capacidadeInfo.textContent = "Este recurso reserva a Sala 15 inteira para o hor\u00e1rio escolhido.";
+    }
+
+    atualizarAulas();
+}
+
+function avaliarProjetor(dataSelecionada, faixa, nivel, sala) {
+    let ocupados = 0;
+    let salaJaReservada = false;
+
+    disponibilidadeProjetor.forEach((dado) => {
+        if (
+            dado[0] === dataSelecionada &&
+            dado[1] === faixa.inicio &&
+            dado[2] === nivel
+        ) {
+            ocupados = dado[3];
+        }
+    });
+
+    salasOcupadas.forEach((dado) => {
+        if (
+            dado[0] === dataSelecionada &&
+            dado[1] === faixa.inicio &&
+            dado[2] === nivel &&
+            dado[3] === sala
+        ) {
+            salaJaReservada = true;
+        }
+    });
+
+    const restante = Math.max(0, 4 - ocupados);
+    if (salaJaReservada) {
+        return { bloqueado: true, detalhe: "Projetor: j\u00e1 reservado nessa sala" };
+    }
+
+    if (restante <= 0) {
+        return { bloqueado: true, detalhe: "Projetor: lotado" };
+    }
+
+    return { bloqueado: false, detalhe: `Projetor: ${restante} dispon\u00edveis` };
+}
+
+function avaliarComputador(dataSelecionada, faixa, nivel, recursoKey, local, quantidade) {
+    const recurso = recursosComputadores[recursoKey];
+    let solicitado = 0;
+    let localJaTemRequisicao = false;
+
+    disponibilidadeComputadores.forEach((dado) => {
+        if (
+            dado[0] === dataSelecionada &&
+            dado[1] === faixa.inicio &&
+            dado[2] === nivel &&
+            dado[3] === recursoKey
+        ) {
+            solicitado = dado[4];
+        }
+    });
+
+    locaisComputadoresOcupados.forEach((dado) => {
+        if (
+            dado[0] === dataSelecionada &&
+            dado[1] === faixa.inicio &&
+            dado[2] === nivel &&
+            dado[3] === recursoKey &&
+            dado[4] === local
+        ) {
+            localJaTemRequisicao = true;
+        }
+    });
+
+    const restante = Math.max(0, recurso.total - solicitado);
+    if (localJaTemRequisicao) {
+        return {
+            bloqueado: true,
+            detalhe: recurso.usa_quantidade
+                ? "Computador: j\u00e1 existe requisi\u00e7\u00e3o para esse local"
+                : "Sala 15: j\u00e1 reservada"
+        };
+    }
+
+    if (recurso.usa_quantidade && quantidade > restante) {
+        return {
+            bloqueado: true,
+            detalhe: `Computador: restam ${restante} unidade(s)`
+        };
+    }
+
+    if (!recurso.usa_quantidade && restante <= 0) {
+        return { bloqueado: true, detalhe: "Sala 15: j\u00e1 reservada" };
+    }
+
+    return {
+        bloqueado: false,
+        detalhe: recurso.usa_quantidade
+            ? `Computador: ${restante} dispon\u00edveis`
+            : "Sala 15: dispon\u00edvel"
+    };
+}
+
+function atualizarAulas() {
+    const aulasDiv = document.getElementById("aulas");
+    const incluirProjetor = document.getElementById("incluir_projetor").checked;
+    const incluirComputador = document.getElementById("incluir_computador").checked;
+    const nivel = document.getElementById("nivel").value;
+    const sala = document.getElementById("sala").value;
+    const recursoComputador = document.getElementById("recurso_computador").value;
+    const localComputador = document.getElementById("local_computador").value;
+    const quantidadeComputador = Number(document.getElementById("quantidade_computador").value || 0);
+    const dataSelecionada = document.getElementById("data").value;
+
+    aulasDiv.innerHTML = "";
+
+    if (!incluirProjetor && !incluirComputador) {
+        aulasDiv.innerHTML = '<p class="subtle">Selecione pelo menos um recurso para liberar as aulas.</p>';
+        return;
+    }
+
+    horarios[nivel].forEach((faixa) => {
+        let bloqueado = false;
+        const detalhes = [];
+
+        if (incluirProjetor) {
+            const statusProjetor = avaliarProjetor(dataSelecionada, faixa, nivel, sala);
+            bloqueado = bloqueado || statusProjetor.bloqueado;
+            detalhes.push(statusProjetor.detalhe);
+        }
+
+        if (incluirComputador) {
+            const statusComputador = avaliarComputador(
+                dataSelecionada,
+                faixa,
+                nivel,
+                recursoComputador,
+                localComputador,
+                quantidadeComputador
+            );
+            bloqueado = bloqueado || statusComputador.bloqueado;
+            detalhes.push(statusComputador.detalhe);
+        }
+
+        const item = document.createElement("label");
+        item.className = "checkbox-option";
+        item.innerHTML = `
+            <input type="checkbox" name="aulas" value="${faixa.inicio}" ${bloqueado ? "disabled" : ""}>
+            <span>${faixa.label} (${faixa.inicio} - ${faixa.fim})</span>
+            <small>${detalhes.join(" • ")}</small>
+        `;
+        aulasDiv.appendChild(item);
+    });
+}
+
+window.onload = atualizarTela;
+</script>
+
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Requisição de Computadores</title>
+</head>
+<body>
+
+<div class="container container-wide">
+<div class="split-layout">
+<aside class="link-row user-links">
+    <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
+    <a class="page-link" href="/">Reservas de projetores</a>
+    <a class="page-link" href="/computadores/consultar?data={{ data_hoje }}">Consultar requisi&ccedil;&otilde;es</a>
+    {% if usuario_eh_ti %}
+    <a class="page-link" href="/computadores/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">Relat&oacute;rio TI Computadores</a>
+    {% endif %}
+    <a class="page-link" href="/logout">Sair</a>
+</aside>
+
+<div class="split-main">
+<h1>Requisição de Computadores</h1>
+<p class="subtle">
+    Solicite notebooks, chromebooks ou o laborat&oacute;rio de inform&aacute;tica usando a mesma organiza&ccedil;&atilde;o de aulas do Fundamental e do M&eacute;dio.
+</p>
+
+{% if mensagem %}
+<div class="alert alert-{{ tipo_mensagem }}">
+    <p>{{ mensagem }}</p>
+</div>
+{% endif %}
+
+<form action="/computadores/solicitar" method="post">
+
+<label for="sigla">Sigla do Professor</label>
+<input
+    type="text"
+    id="sigla"
+    value="{{ usuario_sigla }}"
+    readonly
+>
+
+<label for="nivel">Curso</label>
+<select name="nivel" id="nivel" onchange="atualizarFormulario()">
+    <option value="Fundamental">Ensino Fundamental</option>
+    <option value="Medio">Ensino M&eacute;dio</option>
+</select>
+
+<label for="recurso">Recurso</label>
+<select name="recurso" id="recurso" onchange="atualizarFormulario()">
+    {% for chave, recurso in recursos_computadores.items() %}
+    <option value="{{ chave }}">{{ recurso.label }}</option>
+    {% endfor %}
+</select>
+
+<div id="quantidadeDiv">
+    <label for="quantidade">Quantidade</label>
+    <input type="number" name="quantidade" id="quantidade" min="1" value="1" oninput="atualizarAulas()" required>
+</div>
+<p id="capacidadeInfo" class="subtle compact-text"></p>
+
+<div id="localDiv">
+    <label for="local">Sala de uso</label>
+    <select name="local" id="local" onchange="atualizarAulas()" required></select>
+</div>
+
+<label for="data">Data</label>
+<input type="date" name="data" id="data" value="{{ data_hoje }}" onchange="atualizarAulas()" required>
+
+<label>Aulas</label>
+<div id="aulas"></div>
+
+<button type="submit">Solicitar computadores</button>
+
+</form>
+
+<p class="note">
+    Recursos atuais: 15 notebooks Samsung, 35 chromebooks e a reserva da Sala 15 de inform&aacute;tica por hor&aacute;rio. O limite por reserva de computadores &eacute; 15 unidades.
+</p>
+
+{% if usuario_eh_ti %}
+<div class="internal-access">
+    <p class="subtle">
+        Uso interno da equipe de TI:
+        <a class="page-link subtle-link" href="/computadores/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">abrir relat&oacute;rio de computadores</a>
+    </p>
+</div>
+{% endif %}
+
+</div>
+</div>
+
+</div>
+
+<script>
+const disponibilidade = {{ dados | tojson | safe }};
+const locaisOcupados = {{ locais_ocupados | tojson | safe }};
+const horarios = {{ horarios | tojson | safe }};
+const salasPorNivel = {{ salas | tojson | safe }};
+const recursos = {{ recursos_computadores | tojson | safe }};
+
+function recursoAtual() {
+    return recursos[document.getElementById("recurso").value];
+}
+
+function preencherLocais() {
+    const nivel = document.getElementById("nivel").value;
+    const localDiv = document.getElementById("localDiv");
+    const local = document.getElementById("local");
+    const recurso = recursoAtual();
+
+    local.innerHTML = "";
+
+    if (recurso.usa_sala) {
+        localDiv.style.display = "block";
+        Object.entries(salasPorNivel[nivel]).forEach(([valor, label]) => {
+            const option = document.createElement("option");
+            option.value = valor;
+            option.text = label;
+            local.appendChild(option);
+        });
+    } else {
+        localDiv.style.display = "none";
+        const option = document.createElement("option");
+        option.value = recurso.local_fixo;
+        option.text = recurso.local_label;
+        local.appendChild(option);
+    }
+}
+
+function atualizarFormulario() {
+    const quantidade = document.getElementById("quantidade");
+    const quantidadeDiv = document.getElementById("quantidadeDiv");
+    const info = document.getElementById("capacidadeInfo");
+    const recurso = recursoAtual();
+
+    if (recurso.usa_quantidade) {
+        quantidadeDiv.style.display = "block";
+        quantidade.max = recurso.max_por_reserva;
+        if (!quantidade.value || Number(quantidade.value) > recurso.max_por_reserva) {
+            quantidade.value = Math.min(recurso.max_por_reserva, Math.max(1, Number(quantidade.value) || 1));
+        }
+        info.textContent = `Capacidade total deste recurso: ${recurso.capacidade_label}. Limite por reserva: ${recurso.max_por_reserva}.`;
+    } else {
+        quantidadeDiv.style.display = "none";
+        quantidade.value = 1;
+        info.textContent = "Este recurso reserva a Sala 15.";
+    }
+    preencherLocais();
+    atualizarAulas();
+}
+
+function atualizarAulas() {
+    const aulasDiv = document.getElementById("aulas");
+    const nivel = document.getElementById("nivel").value;
+    const dataSelecionada = document.getElementById("data").value;
+    const local = document.getElementById("local").value;
+    const recursoKey = document.getElementById("recurso").value;
+    const recurso = recursos[recursoKey];
+    const quantidade = Number(document.getElementById("quantidade").value || 0);
+
+    aulasDiv.innerHTML = "";
+
+    horarios[nivel].forEach((faixa) => {
+        let solicitado = 0;
+        let localJaTemRequisicao = false;
+
+        disponibilidade.forEach((dado) => {
+            if (
+                dado[0] === dataSelecionada &&
+                dado[1] === faixa.inicio &&
+                dado[2] === nivel &&
+                dado[3] === recursoKey
+            ) {
+                solicitado = dado[4];
+            }
+        });
+
+        locaisOcupados.forEach((dado) => {
+            if (
+                dado[0] === dataSelecionada &&
+                dado[1] === faixa.inicio &&
+                dado[2] === nivel &&
+                dado[3] === recursoKey &&
+                dado[4] === local
+            ) {
+                localJaTemRequisicao = true;
+            }
+        });
+
+        const restante = Math.max(0, recurso.total - solicitado);
+        const bloqueado = quantidade <= 0 || quantidade > restante || localJaTemRequisicao;
+        let detalhe = recurso.usa_quantidade
+            ? `${restante} dispon\u00edveis`
+            : (restante > 0 ? "Sala 15 dispon\u00edvel" : "Sala 15 j\u00e1 reservada");
+
+        if (localJaTemRequisicao) {
+            detalhe = recurso.usa_quantidade
+                ? "j\u00e1 existe requisi\u00e7\u00e3o desse recurso para este local"
+                : "Sala 15 j\u00e1 reservada neste hor\u00e1rio";
+        } else if (recurso.usa_quantidade && quantidade > restante) {
+            detalhe = `restam ${restante} unidade(s) para este hor\u00e1rio`;
+        }
+
+        const item = document.createElement("label");
+        item.className = "checkbox-option";
+        item.innerHTML = `
+            <input type="checkbox" name="aulas" value="${faixa.inicio}" ${bloqueado ? "disabled" : ""}>
+            <span>${faixa.label} (${faixa.inicio} - ${faixa.fim})</span>
+            <small>${detalhe}</small>
+        `;
+        aulasDiv.appendChild(item);
+    });
+}
+
+window.onload = atualizarFormulario;
+</script>
+
+</body>
+</html>

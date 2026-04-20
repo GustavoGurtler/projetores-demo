@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Painel da TI</title>
+</head>
+<body>
+
+<div class="page">
+
+{% set retorno = request.full_path if request.query_string else request.path %}
+
+<div class="container container-wide">
+    <div class="split-layout">
+    <aside class="link-row user-links">
+        <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
+        <a class="page-link" href="/">Tela de reservas</a>
+        <a class="page-link" href="/computadores">Solicitar computadores</a>
+        <a class="page-link" href="/computadores/consultar?data={{ data_selecionada }}">Consulta de computadores</a>
+        <a class="page-link" href="/reservas?data={{ data_selecionada }}">Consulta p&uacute;blica</a>
+        <a class="page-link" href="/relatorio-ti?data_inicial={{ data_selecionada }}&data_final={{ data_selecionada }}">Relat&oacute;rio TI</a>
+        <a class="page-link" href="/computadores/relatorio-ti?data_inicial={{ data_selecionada }}&data_final={{ data_selecionada }}">Relat&oacute;rio TI Computadores</a>
+        <a class="page-link" href="/usuarios">Gerenciar acessos</a>
+        <a class="page-link" href="/logout">Sair</a>
+    </aside>
+
+    <div class="split-main">
+    <h1>Painel Operacional da TI</h1>
+    <p class="subtle">
+        Esta &eacute; a vis&atilde;o interna da equipe. Use a data desejada para organizar
+        a movimenta&ccedil;&atilde;o dos projetores ao longo da manh&atilde;.
+    </p>
+
+    <form class="inline-form" action="/painel-ti" method="get">
+        <div class="field-grow">
+            <label for="data">Data</label>
+            <input type="date" id="data" name="data" value="{{ data_selecionada }}" required>
+        </div>
+        <button type="submit">Atualizar painel</button>
+    </form>
+
+    <p class="note">
+        O painel identifica os equipamentos do Ensino M&eacute;dio como Husky e os do Ensino Fundamental como Epson para facilitar a rotina da equipe.
+    </p>
+
+    <p class="subtle refresh-note">
+        A lista abaixo mostra apenas o que exige a&ccedil;&atilde;o da TI.
+        {% if data_selecionada == data_hoje %}
+        Ela se atualiza automaticamente a cada 30 segundos.
+        {% else %}
+        Para outras datas, use o filtro acima para consultar o planejamento.
+        {% endif %}
+    </p>
+    </div>
+    </div>
+</div>
+
+{% if mensagem %}
+<div class="container alert alert-{{ tipo_mensagem }}">
+    <p>{{ mensagem }}</p>
+</div>
+{% endif %}
+
+<div class="container">
+    <h2>A Fazeres do Dia</h2>
+
+    {% if tarefas_do_dia %}
+    <div class="task-list">
+        {% for tarefa in tarefas_do_dia %}
+        <article class="task-item task-{{ tarefa.tipo }}">
+            <div class="task-time">{{ tarefa.horario }}</div>
+
+            <div class="task-body">
+                <div class="task-meta">
+                    <span class="status-chip info">{{ tarefa.nivel_label }}</span>
+                    <span class="task-moment">{{ tarefa.momento }}</span>
+                </div>
+                <p>{{ tarefa.descricao }}</p>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">Sem movimenta&ccedil;&otilde;es de projetores para {{ data_selecionada }}.</p>
+    {% endif %}
+</div>
+
+<div class="grid">
+    {% for grupo in painel %}
+    <section class="card">
+        <h2>{{ grupo.nivel_label }}</h2>
+        <div class="availability-list">
+            {% for item in grupo.itens %}
+            <div class="availability-item">
+                <div>
+                    <strong>{{ item.aula }}</strong>
+                    <p>{{ item.inicio }} - {{ item.fim }}</p>
+                </div>
+                <span class="status-chip {{ 'danger' if item.lotado else 'success' }}">
+                    {{ item.disponiveis }} dispon&iacute;veis
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+</div>
+
+<div class="grid">
+    {% for bloco in planejamento %}
+    <section class="card">
+        <h2>{{ bloco.nivel_label }}</h2>
+
+        {% if bloco.tem_reservas %}
+        <h3>Mapa por aula</h3>
+        <div class="timeline">
+            {% for faixa in bloco.ocupacao %}
+            <div class="timeline-card">
+                <div class="timeline-header">
+                    <strong>{{ faixa.aula }}</strong>
+                    <span>{{ faixa.inicio }} - {{ faixa.fim }}</span>
+                </div>
+
+                {% if faixa.reservas %}
+                    {% for item in faixa.reservas %}
+                    <div class="timeline-line">
+                        {{ item.projetor_label }} em {{ item.sala_label }}
+                        {% if item.sigla %}&bull; {{ item.sigla }}{% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <p class="subtle">Sem reservas neste hor&aacute;rio.</p>
+                {% endif %}
+
+                <p class="subtle">{{ faixa.disponiveis }} projetores livres</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-state">Sem reservas cadastradas para este n&iacute;vel nesta data.</p>
+        {% endif %}
+    </section>
+    {% endfor %}
+</div>
+
+<div class="container">
+    <h2>Reservas do Dia</h2>
+
+    {% if reservas %}
+    <div class="table-wrap">
+        <table>
+            <tr>
+                <th>Sigla do Professor</th>
+                <th>Sala</th>
+                <th>Data</th>
+                <th>Hor&aacute;rio</th>
+                <th>Aula</th>
+                <th>N&iacute;vel</th>
+                <th>Som</th>
+                <th>A&ccedil;&otilde;es</th>
+            </tr>
+
+            {% for r in reservas %}
+            <tr>
+                <td>{{ r.sigla }}</td>
+                <td>{{ r.sala_label }}</td>
+                <td>{{ r.data }}</td>
+                <td>{{ r.horario }}{% if r.horario_fim %} - {{ r.horario_fim }}{% endif %}</td>
+                <td>{{ r.aula_label }}</td>
+                <td>{{ r.nivel_label }}</td>
+                <td>{{ r.som }}</td>
+                <td>
+                    <div class="table-actions">
+                        <a class="button-link button-secondary" href="{{ url_for('editar_reserva', reserva_id=r.id, next=retorno) }}">Editar</a>
+                        <form action="{{ url_for('excluir_reserva', reserva_id=r.id) }}" method="post" onsubmit="return confirm('Confirma a exclus&atilde;o desta reserva?');">
+                            <input type="hidden" name="next" value="{{ retorno }}">
+                            <button type="submit" class="button-danger button-inline">Excluir</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">Nenhuma reserva cadastrada para {{ data_selecionada }}.</p>
+    {% endif %}
+</div>
+
+</div>
+
+{% if data_selecionada == data_hoje %}
+<script>
+window.setTimeout(function () {
+    window.location.reload();
+}, 30000);
+</script>
+{% endif %}
+
+</body>
+</html>

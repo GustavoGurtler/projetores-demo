@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Editar Requisição de Computadores</title>
+</head>
+<body>
+
+<div class="container container-wide">
+    <div class="split-layout">
+    <aside class="link-row user-links">
+        <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
+        <a class="page-link" href="{{ proximo }}">Voltar</a>
+        <a class="page-link" href="/">Projetores</a>
+        <a class="page-link" href="/computadores">Nova requisi&ccedil;&atilde;o</a>
+        {% if usuario_eh_ti %}
+        <a class="page-link" href="/computadores/relatorio-ti">Relat&oacute;rio TI Computadores</a>
+        {% endif %}
+        <a class="page-link" href="/logout">Sair</a>
+    </aside>
+
+    <div class="split-main">
+    <h1>Editar Requisi&ccedil;&atilde;o de Computadores</h1>
+    <p class="subtle">
+        Ajuste recurso, quantidade, local e hor&aacute;rio desta requisi&ccedil;&atilde;o. Apenas o autor ou a equipe de TI pode salvar altera&ccedil;&otilde;es.
+    </p>
+
+    {% if mensagem %}
+    <div class="alert alert-{{ tipo_mensagem }}">
+        <p>{{ mensagem }}</p>
+    </div>
+    {% endif %}
+
+    <form action="{{ url_for('editar_requisicao_computador', requisicao_id=requisicao.id) }}" method="post">
+        <input type="hidden" name="next" value="{{ proximo }}">
+
+        <label for="sigla">Sigla do Respons&aacute;vel</label>
+        <input type="text" id="sigla" value="{{ requisicao.sigla }}" readonly>
+
+        <label for="nivel">Curso</label>
+        <select name="nivel" id="nivel" onchange="atualizarFormulario()" required>
+            {% for chave, label in niveis.items() %}
+            <option value="{{ chave }}" {% if requisicao_form.nivel == chave %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="recurso">Recurso</label>
+        <select name="recurso" id="recurso" onchange="atualizarFormulario()" required>
+            {% for chave, recurso in recursos_computadores.items() %}
+            <option value="{{ chave }}" {% if requisicao_form.recurso == chave %}selected{% endif %}>{{ recurso.label }}</option>
+            {% endfor %}
+        </select>
+
+        <div id="quantidadeDiv">
+            <label for="quantidade">Quantidade</label>
+            <input type="number" name="quantidade" id="quantidade" min="1" value="{{ requisicao_form.quantidade }}" required>
+        </div>
+        <p id="capacidadeInfo" class="subtle compact-text"></p>
+
+        <div id="localDiv">
+            <label for="local">Local de uso</label>
+            <select name="local" id="local" data-selected="{{ requisicao_form.local }}" required></select>
+        </div>
+
+        <label for="data">Data</label>
+        <input type="date" name="data" id="data" value="{{ requisicao_form.data }}" required>
+
+        <label for="horario">Hor&aacute;rio</label>
+        <select name="horario" id="horario" data-selected="{{ requisicao_form.horario }}" required></select>
+
+        <button type="submit">Salvar altera&ccedil;&otilde;es</button>
+    </form>
+
+    <div class="link-row">
+        <a class="page-link" href="{{ proximo }}">Cancelar edi&ccedil;&atilde;o</a>
+    </div>
+    </div>
+    </div>
+</div>
+
+<script>
+const salasPorNivel = {{ salas | tojson | safe }};
+const horariosPorNivel = {{ horarios | tojson | safe }};
+const recursos = {{ recursos_computadores | tojson | safe }};
+
+function preencherSelect(select, opcoes, chaveSelecionada, textoFn) {
+    select.innerHTML = "";
+
+    opcoes.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.valor;
+        option.textContent = textoFn(item);
+        option.selected = item.valor === chaveSelecionada;
+        select.appendChild(option);
+    });
+
+    if (!select.value && select.options.length) {
+        select.selectedIndex = 0;
+    }
+}
+
+function atualizarFormulario() {
+    const nivel = document.getElementById("nivel").value;
+    const recurso = recursos[document.getElementById("recurso").value];
+    const quantidade = document.getElementById("quantidade");
+    const quantidadeDiv = document.getElementById("quantidadeDiv");
+    const capacidadeInfo = document.getElementById("capacidadeInfo");
+    const local = document.getElementById("local");
+    const localDiv = document.getElementById("localDiv");
+    const horario = document.getElementById("horario");
+    const localSelecionado = local.value || local.dataset.selected;
+    const horarioSelecionado = horario.value || horario.dataset.selected;
+
+    if (recurso.usa_quantidade) {
+        quantidadeDiv.style.display = "block";
+        quantidade.max = recurso.max_por_reserva;
+        if (!quantidade.value || Number(quantidade.value) > recurso.max_por_reserva) {
+            quantidade.value = Math.min(recurso.max_por_reserva, Math.max(1, Number(quantidade.value) || 1));
+        }
+        capacidadeInfo.textContent = `Capacidade total deste recurso: ${recurso.capacidade_label}. Limite por reserva: ${recurso.max_por_reserva}.`;
+    } else {
+        quantidadeDiv.style.display = "none";
+        quantidade.value = 1;
+        capacidadeInfo.textContent = "Este recurso reserva a Sala 15 inteira para o hor\u00e1rio escolhido.";
+    }
+
+    if (recurso.usa_sala) {
+        localDiv.style.display = "block";
+        const salasNivel = Object.entries(salasPorNivel[nivel] || {}).map(([valor, label]) => ({ valor, label }));
+        preencherSelect(local, salasNivel, localSelecionado, (item) => item.label);
+    } else {
+        localDiv.style.display = "none";
+        preencherSelect(
+            local,
+            [{ valor: recurso.local_fixo, label: recurso.local_label }],
+            recurso.local_fixo,
+            (item) => item.label
+        );
+    }
+
+    const horariosNivel = (horariosPorNivel[nivel] || []).map((item) => ({
+        valor: item.inicio,
+        label: `${item.label} (${item.inicio} - ${item.fim})`
+    }));
+    preencherSelect(horario, horariosNivel, horarioSelecionado, (item) => item.label);
+
+    local.dataset.selected = local.value;
+    horario.dataset.selected = horario.value;
+}
+
+window.addEventListener("load", atualizarFormulario);
+</script>
+
+</body>
+</html>
