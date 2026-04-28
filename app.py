@@ -9,6 +9,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from config import Config
 from database import conectar as abrir_conexao
 from database import criar_tabelas
+from validators import normalizar_sigla_professor, normalizar_som
+from validators import validar_requisicao_computador, validar_reserva
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -119,18 +121,6 @@ def conectar():
 
 
 criar_tabelas(app.config["DATABASE_PATH"])
-
-
-def normalizar_som(valor):
-    if valor in {"Nao", "N\u00e3o", "N\u00c3\u00a3o"}:
-        return "N\u00e3o"
-    if valor in {"Sim", "sim"}:
-        return "Sim"
-    return valor or "N\u00e3o"
-
-
-def normalizar_sigla_professor(valor):
-    return "".join(letra for letra in (valor or "").strip().upper() if letra.isalpha())
 
 
 def usuario_eh_ti(tipo_usuario=None):
@@ -468,18 +458,6 @@ def rotulo_local_computador(nivel, recurso, local):
     return SALAS.get(nivel, {}).get(local, local or "Local n\u00e3o informado")
 
 
-def normalizar_local_requisicao_computador(recurso, local):
-    configuracao = RECURSOS_COMPUTADORES.get(recurso, {})
-    return configuracao.get("local_fixo", local)
-
-
-def obter_quantidade_inteira(valor):
-    try:
-        return int(valor)
-    except (TypeError, ValueError):
-        return None
-
-
 def validar_dados_requisicao_computador(
     nivel,
     recurso,
@@ -488,64 +466,18 @@ def validar_dados_requisicao_computador(
     quantidade,
     horario=None,
 ):
-    if nivel not in SALAS:
-        return "Selecione um n\u00edvel v\u00e1lido.", None, None
-
-    configuracao = RECURSOS_COMPUTADORES.get(recurso)
-    if not configuracao:
-        return "Selecione um recurso de computador v\u00e1lido.", None, None
-
-    if configuracao.get("usa_quantidade", True):
-        quantidade_int = obter_quantidade_inteira(quantidade)
-        if quantidade_int is None or quantidade_int <= 0:
-            return "Informe uma quantidade v\u00e1lida.", None, None
-
-        limite_por_reserva = configuracao.get(
-            "max_por_reserva",
-            min(configuracao["total"], LIMITE_COMPUTADORES_POR_RESERVA),
-        )
-
-        if quantidade_int > limite_por_reserva:
-            return (
-                f"Cada reserva de computadores pode solicitar no m\u00e1ximo {limite_por_reserva} unidades.",
-                None,
-                None,
-            )
-
-        if quantidade_int > configuracao["total"]:
-            return (
-                f"A quantidade solicitada excede o limite de {configuracao['total']} unidades para este recurso.",
-                None,
-                None,
-            )
-    else:
-        quantidade_int = 1
-
-    if not data_requisicao:
-        return "Informe a data da requisi\u00e7\u00e3o.", None, None
-
-    try:
-        date.fromisoformat(data_requisicao)
-    except ValueError:
-        return "Informe uma data de requisi\u00e7\u00e3o v\u00e1lida.", None, None
-
-    local_normalizado = normalizar_local_requisicao_computador(recurso, local)
-    if configuracao.get("usa_sala", True):
-        if local_normalizado not in SALAS[nivel]:
-            return (
-                "Selecione uma sala v\u00e1lida para o recurso escolhido.",
-                None,
-                None,
-            )
-
-    if horario is not None and horario not in HORARIOS_POR_INICIO[nivel]:
-        return (
-            "Selecione um hor\u00e1rio v\u00e1lido para o n\u00edvel escolhido.",
-            None,
-            None,
-        )
-
-    return None, quantidade_int, local_normalizado
+    return validar_requisicao_computador(
+        nivel,
+        recurso,
+        local,
+        data_requisicao,
+        quantidade,
+        salas=SALAS,
+        recursos_computadores=RECURSOS_COMPUTADORES,
+        horarios_por_inicio=HORARIOS_POR_INICIO,
+        limite_computadores_por_reserva=LIMITE_COMPUTADORES_POR_RESERVA,
+        horario=horario,
+    )
 
 
 def buscar_disponibilidade_computadores_geral():
@@ -708,24 +640,14 @@ def buscar_reserva_por_id(reserva_id):
 
 
 def validar_dados_reserva(nivel, sala, data_reserva, horario=None):
-    if nivel not in SALAS:
-        return "Selecione um n\u00edvel v\u00e1lido."
-
-    if sala not in SALAS[nivel]:
-        return "Selecione uma sala v\u00e1lida para o n\u00edvel escolhido."
-
-    if not data_reserva:
-        return "Informe a data da reserva."
-
-    try:
-        date.fromisoformat(data_reserva)
-    except ValueError:
-        return "Informe uma data de reserva v\u00e1lida."
-
-    if horario is not None and horario not in HORARIOS_POR_INICIO[nivel]:
-        return "Selecione um hor\u00e1rio v\u00e1lido para o n\u00edvel escolhido."
-
-    return None
+    return validar_reserva(
+        nivel,
+        sala,
+        data_reserva,
+        salas=SALAS,
+        horarios_por_inicio=HORARIOS_POR_INICIO,
+        horario=horario,
+    )
 
 
 def obter_clausula_ignorar_reserva(reserva_id_ignorada):
