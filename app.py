@@ -9,6 +9,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from config import Config
 from database import conectar as abrir_conexao
 from database import criar_tabelas
+from permissions import usuario_eh_ti as verificar_usuario_eh_ti
+from permissions import usuario_pode_gerenciar_por_sigla as verificar_permissao_sigla
+from permissions import usuario_pode_gerenciar_reserva as verificar_permissao_reserva
 from validators import normalizar_sigla_professor, normalizar_som
 from validators import validar_requisicao_computador, validar_reserva
 
@@ -125,7 +128,7 @@ criar_tabelas(app.config["DATABASE_PATH"])
 
 def usuario_eh_ti(tipo_usuario=None):
     tipo_usuario = tipo_usuario or session.get("usuario_tipo")
-    return tipo_usuario == "ti"
+    return verificar_usuario_eh_ti(tipo_usuario)
 
 
 def usuario_pode_gerenciar_por_sigla(
@@ -135,11 +138,7 @@ def usuario_pode_gerenciar_por_sigla(
 ):
     sigla_usuario = sigla_usuario or session.get("usuario_sigla")
     tipo_usuario = tipo_usuario or session.get("usuario_tipo")
-
-    if not sigla_usuario or not sigla_registro:
-        return False
-
-    return usuario_eh_ti(tipo_usuario) or sigla_usuario == sigla_registro
+    return verificar_permissao_sigla(sigla_registro, sigla_usuario, tipo_usuario)
 
 
 def usuario_pode_gerenciar_reserva(
@@ -147,14 +146,9 @@ def usuario_pode_gerenciar_reserva(
     sigla_usuario=None,
     tipo_usuario=None,
 ):
-    if not reserva:
-        return False
-
-    return usuario_pode_gerenciar_por_sigla(
-        reserva["sigla"],
-        sigla_usuario=sigla_usuario,
-        tipo_usuario=tipo_usuario,
-    )
+    sigla_usuario = sigla_usuario or session.get("usuario_sigla")
+    tipo_usuario = tipo_usuario or session.get("usuario_tipo")
+    return verificar_permissao_reserva(reserva, sigla_usuario, tipo_usuario)
 
 
 def buscar_usuario_por_sigla(sigla):
