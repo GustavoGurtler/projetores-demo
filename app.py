@@ -4,7 +4,7 @@ from functools import wraps
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from flask import Flask, redirect, render_template, request, session, url_for
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import check_password_hash
 
 from config import Config
 from database import conectar as abrir_conexao
@@ -12,6 +12,10 @@ from database import criar_tabelas
 from permissions import usuario_eh_ti as verificar_usuario_eh_ti
 from permissions import usuario_pode_gerenciar_por_sigla as verificar_permissao_sigla
 from permissions import usuario_pode_gerenciar_reserva as verificar_permissao_reserva
+from usuarios import buscar_usuario_por_sigla as buscar_usuario_por_sigla_db
+from usuarios import criar_usuario as criar_usuario_db
+from usuarios import existe_usuario_ti as existe_usuario_ti_db
+from usuarios import listar_usuarios as listar_usuarios_db
 from validators import normalizar_sigla_professor, normalizar_som
 from validators import validar_requisicao_computador, validar_reserva
 
@@ -152,80 +156,19 @@ def usuario_pode_gerenciar_reserva(
 
 
 def buscar_usuario_por_sigla(sigla):
-    conn = conectar()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT id, sigla, senha_hash, tipo
-        FROM usuarios
-        WHERE sigla = ?
-        """,
-        (sigla,),
-    )
-    linha = c.fetchone()
-    conn.close()
-
-    if not linha:
-        return None
-
-    return {
-        "id": linha[0],
-        "sigla": linha[1],
-        "senha_hash": linha[2],
-        "tipo": linha[3],
-        "tipo_label": TIPOS_USUARIO.get(linha[3], linha[3]),
-    }
+    return buscar_usuario_por_sigla_db(conectar, sigla, TIPOS_USUARIO)
 
 
 def listar_usuarios():
-    conn = conectar()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT sigla, tipo
-        FROM usuarios
-        ORDER BY tipo, sigla
-        """
-    )
-    usuarios = [
-        {
-            "sigla": linha[0],
-            "tipo": linha[1],
-            "tipo_label": TIPOS_USUARIO.get(linha[1], linha[1]),
-        }
-        for linha in c.fetchall()
-    ]
-    conn.close()
-    return usuarios
+    return listar_usuarios_db(conectar, TIPOS_USUARIO)
 
 
 def existe_usuario_ti():
-    conn = conectar()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT COUNT(*)
-        FROM usuarios
-        WHERE tipo = 'ti'
-        """
-    )
-    total = c.fetchone()[0]
-    conn.close()
-    return total > 0
+    return existe_usuario_ti_db(conectar)
 
 
 def criar_usuario(sigla, senha, tipo):
-    conn = conectar()
-    c = conn.cursor()
-    c.execute(
-        """
-        INSERT INTO usuarios (sigla, senha_hash, tipo)
-        VALUES (?, ?, ?)
-        """,
-        (sigla, generate_password_hash(senha), tipo),
-    )
-    conn.commit()
-    conn.close()
+    criar_usuario_db(conectar, sigla, senha, tipo)
 
 
 def adicionar_parametros_url(url, **params):
