@@ -49,5 +49,33 @@ def criar_tabelas(caminho_banco):
         """
     )
 
+    c.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_reservas_data_horario_nivel
+        ON reservas (data, horario, nivel)
+        """
+    )
+
+    c.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_reservas_sigla
+        ON reservas (sigla)
+        """
+    )
+
+    c.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_requisicoes_computadores_data_horario
+        ON requisicoes_computadores (data, horario, recurso, nivel)
+        """
+    )
+
+    c.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_requisicoes_computadores_sigla
+        ON requisicoes_computadores (sigla)
+        """
+    )
+
     conn.commit()
     conn.close()
