@@ -1,15 +1,16 @@
 from collections import defaultdict
 from datetime import date
 from functools import wraps
-import os
 import sqlite3
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from flask import Flask, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from config import Config
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("APP_SECRET_KEY", "reservas-projetor-dev-secret")
+app.config.from_object(Config)
 
 TOTAL_PROJETORES = 4
 LIMITE_COMPUTADORES_POR_RESERVA = 15
@@ -113,7 +114,7 @@ def hora_para_minutos(horario):
 
 
 def conectar():
-    return sqlite3.connect("reservas.db")
+    return sqlite3.connect(app.config["DATABASE_PATH"])
 
 
 def criar_tabelas():
@@ -2577,4 +2578,4 @@ def relatorio_computadores_ti():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=app.config["FLASK_DEBUG"], port=app.config["PORT"])
