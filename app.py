@@ -1,13 +1,14 @@
 from collections import defaultdict
 from datetime import date
 from functools import wraps
-import sqlite3
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from flask import Flask, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import Config
+from database import conectar as abrir_conexao
+from database import criar_tabelas
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -114,58 +115,10 @@ def hora_para_minutos(horario):
 
 
 def conectar():
-    return sqlite3.connect(app.config["DATABASE_PATH"])
+    return abrir_conexao(app.config["DATABASE_PATH"])
 
 
-def criar_tabelas():
-    conn = conectar()
-    c = conn.cursor()
-
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS reservas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sigla TEXT,
-            sala TEXT,
-            data TEXT,
-            horario TEXT,
-            nivel TEXT,
-            som TEXT
-        )
-        """
-    )
-
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sigla TEXT UNIQUE,
-            senha_hash TEXT,
-            tipo TEXT
-        )
-        """
-    )
-
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS requisicoes_computadores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sigla TEXT,
-            recurso TEXT,
-            quantidade INTEGER,
-            local TEXT,
-            data TEXT,
-            horario TEXT,
-            nivel TEXT
-        )
-        """
-    )
-
-    conn.commit()
-    conn.close()
-
-
-criar_tabelas()
+criar_tabelas(app.config["DATABASE_PATH"])
 
 
 def normalizar_som(valor):
