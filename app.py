@@ -12,6 +12,9 @@ from database import criar_tabelas
 from permissions import usuario_eh_ti as verificar_usuario_eh_ti
 from permissions import usuario_pode_gerenciar_por_sigla as verificar_permissao_sigla
 from permissions import usuario_pode_gerenciar_reserva as verificar_permissao_reserva
+from reservas_service import montar_mensagens_reserva_projetor as montar_mensagens_reserva_service
+from reservas_service import registrar_reservas_projetor as registrar_reservas_service
+from reservas_service import verificar_conflitos_reserva as verificar_conflitos_reserva_service
 from usuarios import buscar_usuario_por_sigla as buscar_usuario_por_sigla_db
 from usuarios import criar_usuario as criar_usuario_db
 from usuarios import existe_usuario_ti as existe_usuario_ti_db
@@ -587,10 +590,6 @@ def validar_dados_reserva(nivel, sala, data_reserva, horario=None):
     )
 
 
-def obter_clausula_ignorar_reserva(reserva_id_ignorada):
-    return obter_clausula_ignorar_id(reserva_id_ignorada)
-
-
 def verificar_conflitos_reserva(
     cursor,
     data_reserva,
@@ -599,29 +598,15 @@ def verificar_conflitos_reserva(
     sala,
     reserva_id_ignorada=None,
 ):
-    clausula, parametros_extra = obter_clausula_ignorar_reserva(reserva_id_ignorada)
-
-    cursor.execute(
-        f"""
-        SELECT COUNT(*)
-        FROM reservas
-        WHERE data = ? AND horario = ? AND nivel = ? AND sala = ?{clausula}
-        """,
-        (data_reserva, horario, nivel, sala, *parametros_extra),
+    return verificar_conflitos_reserva_service(
+        cursor,
+        data_reserva,
+        horario,
+        nivel,
+        sala,
+        TOTAL_PROJETORES,
+        reserva_id_ignorada=reserva_id_ignorada,
     )
-    conflito_sala = cursor.fetchone()[0] > 0
-
-    cursor.execute(
-        f"""
-        SELECT COUNT(DISTINCT sala)
-        FROM reservas
-        WHERE data = ? AND horario = ? AND nivel = ?{clausula}
-        """,
-        (data_reserva, horario, nivel, *parametros_extra),
-    )
-    limite_atingido = cursor.fetchone()[0] >= TOTAL_PROJETORES
-
-    return conflito_sala, limite_atingido
 
 
 def verificar_conflitos_requisicao_computador(
@@ -670,68 +655,22 @@ def registrar_reservas_projetor(
     aulas,
     som,
 ):
-    resultado = {
-        "inseridas": 0,
-        "bloqueios_sala": 0,
-        "bloqueios_limite": 0,
-        "sala_label": SALAS[nivel].get(sala, f"Sala {sala}"),
-    }
-
-    for aula in aulas:
-        if aula not in HORARIOS_POR_INICIO[nivel]:
-            resultado["bloqueios_sala"] += 1
-            continue
-
-        conflito_sala, limite_atingido = verificar_conflitos_reserva(
-            cursor,
-            data_reserva,
-            aula,
-            nivel,
-            sala,
-        )
-
-        if conflito_sala:
-            resultado["bloqueios_sala"] += 1
-            continue
-
-        if limite_atingido:
-            resultado["bloqueios_limite"] += 1
-            continue
-
-        cursor.execute(
-            """
-            INSERT INTO reservas (sigla, sala, data, horario, nivel, som)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (sigla, sala, data_reserva, aula, nivel, som),
-        )
-        resultado["inseridas"] += 1
-
-    return resultado
+    return registrar_reservas_service(
+        cursor,
+        sigla,
+        sala,
+        data_reserva,
+        nivel,
+        aulas,
+        som,
+        salas=SALAS,
+        horarios_por_inicio=HORARIOS_POR_INICIO,
+        total_projetores=TOTAL_PROJETORES,
+    )
 
 
 def montar_mensagens_reserva_projetor(resultado):
-    mensagens = []
-    tipo = "success"
-
-    if resultado["inseridas"]:
-        mensagens.append(
-            f"{resultado['inseridas']} hor\u00e1rio(s) reservado(s) de projetor para {resultado['sala_label']}."
-        )
-
-    if resultado["bloqueios_sala"]:
-        tipo = "warning"
-        mensagens.append(
-            f"{resultado['bloqueios_sala']} hor\u00e1rio(s) j\u00e1 tinham projetor reservado nessa sala."
-        )
-
-    if resultado["bloqueios_limite"]:
-        tipo = "warning"
-        mensagens.append(
-            f"{resultado['bloqueios_limite']} hor\u00e1rio(s) n\u00e3o foram reservados porque os 4 projetores do n\u00edvel j\u00e1 estavam em uso."
-        )
-
-    return mensagens, tipo
+    return montar_mensagens_reserva_service(resultado)
 
 
 def registrar_requisicoes_computador(
