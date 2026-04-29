@@ -33,6 +33,13 @@ from reservas_service import montar_mensagens_reserva_projetor as montar_mensage
 from reservas_service import registrar_reservas_projetor as registrar_reservas_service
 from reservas_service import verificar_conflitos_reserva as verificar_conflitos_reserva_service
 from relatorios_service import montar_relatorio_computadores_ti, montar_relatorio_ti
+from serializers import marcar_permissoes_requisicao_computador as marcar_perm_req_comp
+from serializers import marcar_permissoes_requisicoes_computadores as marcar_perm_req_comps
+from serializers import marcar_permissoes_reserva as marcar_perm_reserva
+from serializers import marcar_permissoes_reservas as marcar_perm_reservas
+from serializers import rotulo_local_computador as rotulo_local_computador_serializer
+from serializers import serializar_requisicao_computador as serializar_req_comp
+from serializers import serializar_reserva as serializar_reserva_db
 from usuarios import buscar_usuario_por_sigla as buscar_usuario_por_sigla_db
 from usuarios import criar_usuario as criar_usuario_db
 from usuarios import existe_usuario_ti as existe_usuario_ti_db
@@ -177,26 +184,7 @@ def ti_obrigatorio(view):
 
 
 def serializar_reserva(linha):
-    reserva = {
-        "id": linha[0],
-        "sigla": linha[1],
-        "sala": linha[2],
-        "data": linha[3],
-        "horario": linha[4],
-        "nivel": linha[5],
-        "som": normalizar_som(linha[6]),
-    }
-
-    faixa = HORARIOS_POR_INICIO.get(reserva["nivel"], {}).get(reserva["horario"])
-    reserva["nivel_label"] = NIVEL_LABELS.get(reserva["nivel"], reserva["nivel"])
-    reserva["sala_label"] = SALAS.get(reserva["nivel"], {}).get(
-        reserva["sala"],
-        f"Sala {reserva['sala']}",
-    )
-    reserva["aula_label"] = faixa["label"] if faixa else reserva["horario"]
-    reserva["horario_fim"] = faixa["fim"] if faixa else ""
-    reserva["pode_gerenciar"] = False
-    return reserva
+    return serializar_reserva_db(linha)
 
 
 def marcar_permissoes_reserva(
@@ -207,12 +195,13 @@ def marcar_permissoes_reserva(
     if not reserva:
         return None
 
-    reserva["pode_gerenciar"] = usuario_pode_gerenciar_reserva(
+    sigla_usuario = sigla_usuario or session.get("usuario_sigla")
+    tipo_usuario = tipo_usuario or session.get("usuario_tipo")
+    return marcar_perm_reserva(
         reserva,
         sigla_usuario=sigla_usuario,
         tipo_usuario=tipo_usuario,
     )
-    return reserva
 
 
 def marcar_permissoes_reservas(
@@ -220,60 +209,17 @@ def marcar_permissoes_reservas(
     sigla_usuario=None,
     tipo_usuario=None,
 ):
-    return [
-        marcar_permissoes_reserva(
-            reserva,
-            sigla_usuario=sigla_usuario,
-            tipo_usuario=tipo_usuario,
-        )
-        for reserva in reservas
-    ]
+    sigla_usuario = sigla_usuario or session.get("usuario_sigla")
+    tipo_usuario = tipo_usuario or session.get("usuario_tipo")
+    return marcar_perm_reservas(
+        reservas,
+        sigla_usuario=sigla_usuario,
+        tipo_usuario=tipo_usuario,
+    )
 
 
 def serializar_requisicao_computador(linha):
-    requisicao = {
-        "id": linha[0],
-        "sigla": linha[1],
-        "recurso": linha[2],
-        "quantidade": linha[3],
-        "local": linha[4],
-        "data": linha[5],
-        "horario": linha[6],
-        "nivel": linha[7],
-    }
-
-    faixa = HORARIOS_POR_INICIO.get(requisicao["nivel"], {}).get(requisicao["horario"])
-    recurso = RECURSOS_COMPUTADORES.get(requisicao["recurso"], {})
-    requisicao["nivel_label"] = NIVEL_LABELS.get(
-        requisicao["nivel"],
-        requisicao["nivel"],
-    )
-    requisicao["recurso_label"] = recurso.get("label", requisicao["recurso"])
-    requisicao["recurso_total"] = recurso.get("total", 0)
-    requisicao["max_por_reserva"] = recurso.get(
-        "max_por_reserva",
-        min(requisicao["recurso_total"], LIMITE_COMPUTADORES_POR_RESERVA),
-    )
-    requisicao["usa_sala"] = recurso.get("usa_sala", True)
-    requisicao["usa_quantidade"] = recurso.get("usa_quantidade", True)
-    requisicao["capacidade_label"] = recurso.get(
-        "capacidade_label",
-        f"{requisicao['recurso_total']} unidades",
-    )
-    requisicao["local_label"] = rotulo_local_computador(
-        requisicao["nivel"],
-        requisicao["recurso"],
-        requisicao["local"],
-    )
-    requisicao["quantidade_label"] = (
-        str(requisicao["quantidade"])
-        if requisicao["usa_quantidade"]
-        else "Sala completa"
-    )
-    requisicao["aula_label"] = faixa["label"] if faixa else requisicao["horario"]
-    requisicao["horario_fim"] = faixa["fim"] if faixa else ""
-    requisicao["pode_gerenciar"] = False
-    return requisicao
+    return serializar_req_comp(linha)
 
 
 def marcar_permissoes_requisicao_computador(
@@ -284,12 +230,13 @@ def marcar_permissoes_requisicao_computador(
     if not requisicao:
         return None
 
-    requisicao["pode_gerenciar"] = usuario_pode_gerenciar_por_sigla(
-        requisicao["sigla"],
+    sigla_usuario = sigla_usuario or session.get("usuario_sigla")
+    tipo_usuario = tipo_usuario or session.get("usuario_tipo")
+    return marcar_perm_req_comp(
+        requisicao,
         sigla_usuario=sigla_usuario,
         tipo_usuario=tipo_usuario,
     )
-    return requisicao
 
 
 def marcar_permissoes_requisicoes_computadores(
@@ -297,23 +244,17 @@ def marcar_permissoes_requisicoes_computadores(
     sigla_usuario=None,
     tipo_usuario=None,
 ):
-    return [
-        marcar_permissoes_requisicao_computador(
-            requisicao,
-            sigla_usuario=sigla_usuario,
-            tipo_usuario=tipo_usuario,
-        )
-        for requisicao in requisicoes
-    ]
+    sigla_usuario = sigla_usuario or session.get("usuario_sigla")
+    tipo_usuario = tipo_usuario or session.get("usuario_tipo")
+    return marcar_perm_req_comps(
+        requisicoes,
+        sigla_usuario=sigla_usuario,
+        tipo_usuario=tipo_usuario,
+    )
 
 
 def rotulo_local_computador(nivel, recurso, local):
-    configuracao = RECURSOS_COMPUTADORES.get(recurso, {})
-
-    if local == configuracao.get("local_fixo"):
-        return configuracao.get("local_label", local)
-
-    return SALAS.get(nivel, {}).get(local, local or "Local n\u00e3o informado")
+    return rotulo_local_computador_serializer(nivel, recurso, local)
 
 
 def validar_dados_requisicao_computador(
