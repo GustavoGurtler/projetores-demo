@@ -6,6 +6,9 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from flask import Flask, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
+from computadores_service import montar_mensagens_requisicao_computador as montar_mensagens_computador_service
+from computadores_service import registrar_requisicoes_computador as registrar_requisicoes_computador_service
+from computadores_service import verificar_conflitos_requisicao_computador as verificar_conflitos_computador_service
 from config import Config
 from database import conectar as abrir_conexao
 from database import criar_tabelas
@@ -523,31 +526,17 @@ def verificar_conflitos_requisicao_computador(
     quantidade,
     requisicao_id_ignorada=None,
 ):
-    clausula, parametros_extra = obter_clausula_ignorar_id(requisicao_id_ignorada)
-
-    cursor.execute(
-        f"""
-        SELECT COUNT(*)
-        FROM requisicoes_computadores
-        WHERE data = ? AND horario = ? AND nivel = ? AND recurso = ? AND local = ?{clausula}
-        """,
-        (data_requisicao, horario, nivel, recurso, local, *parametros_extra),
+    return verificar_conflitos_computador_service(
+        cursor,
+        data_requisicao,
+        horario,
+        nivel,
+        recurso,
+        local,
+        quantidade,
+        RECURSOS_COMPUTADORES,
+        requisicao_id_ignorada=requisicao_id_ignorada,
     )
-    conflito_local = cursor.fetchone()[0] > 0
-
-    cursor.execute(
-        f"""
-        SELECT COALESCE(SUM(quantidade), 0)
-        FROM requisicoes_computadores
-        WHERE data = ? AND horario = ? AND nivel = ? AND recurso = ?{clausula}
-        """,
-        (data_requisicao, horario, nivel, recurso, *parametros_extra),
-    )
-    quantidade_ja_solicitada = cursor.fetchone()[0]
-    total_recurso = RECURSOS_COMPUTADORES[recurso]["total"]
-    limite_excedido = quantidade_ja_solicitada + quantidade > total_recurso
-
-    return conflito_local, limite_excedido, max(0, total_recurso - quantidade_ja_solicitada)
 
 
 def registrar_reservas_projetor(
@@ -587,97 +576,23 @@ def registrar_requisicoes_computador(
     nivel,
     aulas,
 ):
-    resultado = {
-        "inseridas": 0,
-        "bloqueios_local": 0,
-        "bloqueios_limite": 0,
-        "recurso_label": RECURSOS_COMPUTADORES[recurso]["label"],
-        "local_label": rotulo_local_computador(nivel, recurso, local_normalizado),
-        "quantidade": quantidade_int,
-        "usa_quantidade": RECURSOS_COMPUTADORES[recurso].get("usa_quantidade", True),
-    }
-
-    for aula in aulas:
-        if aula not in HORARIOS_POR_INICIO[nivel]:
-            resultado["bloqueios_local"] += 1
-            continue
-
-        conflito_local, limite_excedido, _ = verificar_conflitos_requisicao_computador(
-            cursor,
-            data_requisicao,
-            aula,
-            nivel,
-            recurso,
-            local_normalizado,
-            quantidade_int,
-        )
-
-        if conflito_local:
-            resultado["bloqueios_local"] += 1
-            continue
-
-        if limite_excedido:
-            resultado["bloqueios_limite"] += 1
-            continue
-
-        cursor.execute(
-            """
-            INSERT INTO requisicoes_computadores
-                (sigla, recurso, quantidade, local, data, horario, nivel)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                sigla,
-                recurso,
-                quantidade_int,
-                local_normalizado,
-                data_requisicao,
-                aula,
-                nivel,
-            ),
-        )
-        resultado["inseridas"] += 1
-
-    return resultado
+    return registrar_requisicoes_computador_service(
+        cursor,
+        sigla,
+        recurso,
+        quantidade_int,
+        local_normalizado,
+        data_requisicao,
+        nivel,
+        aulas,
+        recursos_computadores=RECURSOS_COMPUTADORES,
+        horarios_por_inicio=HORARIOS_POR_INICIO,
+        rotulo_local=rotulo_local_computador,
+    )
 
 
 def montar_mensagens_requisicao_computador(resultado):
-    mensagens = []
-    tipo = "success"
-
-    if resultado["inseridas"]:
-        if resultado["usa_quantidade"]:
-            mensagens.append(
-                (
-                    f"{resultado['inseridas']} hor\u00e1rio(s) solicitados para "
-                    f"{resultado['recurso_label']} em {resultado['local_label']}, "
-                    f"quantidade {resultado['quantidade']}."
-                )
-            )
-        else:
-            mensagens.append(
-                f"{resultado['inseridas']} hor\u00e1rio(s) reservados para {resultado['recurso_label']}."
-            )
-
-    if resultado["bloqueios_local"]:
-        tipo = "warning"
-        mensagens.append(
-            (
-                f"{resultado['bloqueios_local']} hor\u00e1rio(s) j\u00e1 tinham requisi\u00e7\u00e3o "
-                "desse recurso para esse local."
-            )
-        )
-
-    if resultado["bloqueios_limite"]:
-        tipo = "warning"
-        mensagens.append(
-            (
-                f"{resultado['bloqueios_limite']} hor\u00e1rio(s) n\u00e3o foram solicitados porque "
-                "a quantidade ultrapassa a disponibilidade do recurso."
-            )
-        )
-
-    return mensagens, tipo
+    return montar_mensagens_computador_service(resultado)
 
 
 def buscar_reservas_relatorio(data_inicial, data_final, nivel="", sigla=""):
