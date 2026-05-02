@@ -4,6 +4,7 @@ import sys
 
 def carregar_app(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "reservas_teste.db"))
+    monkeypatch.setenv("DEMO_DATA_ENABLED", "0")
     monkeypatch.setenv("FLASK_DEBUG", "0")
 
     sys.modules.pop("app", None)

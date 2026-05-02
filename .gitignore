@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .env
+*.db
 run.out.log
 run.err.log
 server.out.log

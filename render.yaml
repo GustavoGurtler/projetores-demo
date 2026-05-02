@@ -5,7 +5,10 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
+    healthCheckPath: /health
     envVars:
+      - key: DEMO_DATA_ENABLED
+        value: "1"
       - key: FLASK_DEBUG
         value: "0"
       - key: APP_SECRET_KEY

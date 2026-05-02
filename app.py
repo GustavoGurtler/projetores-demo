@@ -19,6 +19,7 @@ from consultas import buscar_reservas_por_data as buscar_reservas_data_db
 from consultas import buscar_reservas_relatorio as buscar_reservas_relatorio_db
 from database import conectar as abrir_conexao
 from database import criar_tabelas
+from demo_data import DEMO_CREDENTIALS, popular_dados_demo
 from domain import HORARIOS, HORARIOS_POR_INICIO
 from domain import LIMITE_COMPUTADORES_POR_RESERVA, LOCAL_LABORATORIO
 from domain import NIVEL_LABELS, RECURSOS_COMPUTADORES
@@ -56,6 +57,9 @@ def conectar():
 
 
 criar_tabelas(app.config["DATABASE_PATH"])
+
+if app.config["DEMO_DATA_ENABLED"]:
+    popular_dados_demo(app.config["DATABASE_PATH"])
 
 
 def usuario_eh_ti(tipo_usuario=None):
@@ -457,7 +461,14 @@ def injetar_usuario():
         "usuario_tipo": tipo,
         "usuario_tipo_label": TIPOS_USUARIO.get(tipo),
         "usuario_eh_ti": tipo == "ti",
+        "demo_data_enabled": app.config["DEMO_DATA_ENABLED"],
+        "demo_credentials": DEMO_CREDENTIALS,
     }
+
+
+@app.route("/health")
+def health():
+    return {"status": "ok"}
 
 
 @app.route("/login", methods=["GET", "POST"])

@@ -227,6 +227,44 @@ a:hover {
     margin: 16px 0 0;
 }
 
+.demo-access {
+    margin: 18px 0 24px;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.72);
+    border: 1px solid rgba(103, 232, 249, 0.22);
+    border-radius: 14px;
+}
+
+.demo-access strong {
+    display: block;
+    margin-bottom: 12px;
+    color: #f8fafc;
+}
+
+.demo-access-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.demo-access-grid div {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+    background: rgba(30, 41, 59, 0.82);
+    border-radius: 12px;
+}
+
+.demo-access-grid span {
+    color: #cbd5e1;
+    font-size: 0.9rem;
+}
+
+.demo-access-grid code {
+    color: #f8fafc;
+    font-family: "Consolas", monospace;
+}
+
 .internal-access {
     margin-top: 18px;
     padding-top: 14px;
