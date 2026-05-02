@@ -15,4 +15,5 @@ class Config:
         "yes",
         "on",
     }
+    HOST = os.environ.get("HOST", "127.0.0.1")
     PORT = int(os.environ.get("PORT", "5001"))
