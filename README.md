@@ -37,6 +37,8 @@ Acesse em `http://127.0.0.1:5001/login`
 
 Ao iniciar, o sistema cria o banco local e preenche dados ficticios de demonstracao.
 
+Na versao online, a demo usa acessos fixos, bloqueia novos usuarios e refaz os dados ficticios periodicamente para manter o ambiente limpo.
+
 ---
 
 ## Autor

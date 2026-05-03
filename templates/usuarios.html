@@ -41,6 +41,11 @@
 <div class="grid">
     <section class="card">
         <h2>Novo Acesso</h2>
+        {% if demo_data_enabled %}
+        <p class="note">
+            Na demo p&uacute;blica, os acessos ficam fixos para evitar altera&ccedil;&otilde;es indevidas.
+        </p>
+        {% else %}
         <form action="/usuarios" method="post">
             <label for="sigla">Sigla</label>
             <input
@@ -69,6 +74,7 @@
 
             <button type="submit">Salvar acesso</button>
         </form>
+        {% endif %}
     </section>
 
     <section class="card">

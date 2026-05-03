@@ -9,6 +9,14 @@ services:
     envVars:
       - key: DEMO_DATA_ENABLED
         value: "1"
+      - key: DEMO_MAX_RECORDS
+        value: "80"
+      - key: DEMO_RATE_LIMIT_REQUESTS
+        value: "40"
+      - key: DEMO_RATE_LIMIT_WINDOW_SECONDS
+        value: "600"
+      - key: DEMO_RESET_INTERVAL_HOURS
+        value: "6"
       - key: FLASK_DEBUG
         value: "0"
       - key: APP_SECRET_KEY

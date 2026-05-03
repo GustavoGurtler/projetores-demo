@@ -51,6 +51,15 @@ def criar_tabelas(caminho_banco):
 
     c.execute(
         """
+        CREATE TABLE IF NOT EXISTS demo_controle (
+            chave TEXT PRIMARY KEY,
+            valor TEXT
+        )
+        """
+    )
+
+    c.execute(
+        """
         CREATE INDEX IF NOT EXISTS idx_reservas_data_horario_nivel
         ON reservas (data, horario, nivel)
         """

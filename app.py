@@ -19,7 +19,8 @@ from consultas import buscar_reservas_por_data as buscar_reservas_data_db
 from consultas import buscar_reservas_relatorio as buscar_reservas_relatorio_db
 from database import conectar as abrir_conexao
 from database import criar_tabelas
-from demo_data import DEMO_CREDENTIALS, popular_dados_demo
+from demo_data import DEMO_CREDENTIALS, manter_dados_demo, popular_dados_demo
+from demo_protection import DemoRateLimiter, RateLimitExceeded, identificar_cliente
 from domain import HORARIOS, HORARIOS_POR_INICIO
 from domain import LIMITE_COMPUTADORES_POR_RESERVA, LOCAL_LABORATORIO
 from domain import NIVEL_LABELS, RECURSOS_COMPUTADORES
@@ -50,6 +51,10 @@ from validators import validar_requisicao_computador, validar_reserva
 
 app = Flask(__name__)
 app.config.from_object(Config)
+demo_rate_limiter = DemoRateLimiter(
+    app.config["DEMO_RATE_LIMIT_REQUESTS"],
+    app.config["DEMO_RATE_LIMIT_WINDOW_SECONDS"],
+)
 
 
 def conectar():
@@ -60,6 +65,44 @@ criar_tabelas(app.config["DATABASE_PATH"])
 
 if app.config["DEMO_DATA_ENABLED"]:
     popular_dados_demo(app.config["DATABASE_PATH"])
+
+
+@app.before_request
+def proteger_demo_publica():
+    if not app.config["DEMO_DATA_ENABLED"]:
+        return None
+
+    manter_dados_demo(
+        app.config["DATABASE_PATH"],
+        app.config["DEMO_RESET_INTERVAL_HOURS"],
+        app.config["DEMO_MAX_RECORDS"],
+    )
+
+    if request.method != "POST":
+        return None
+
+    chave = f"{identificar_cliente(request)}:{request.endpoint or request.path}"
+
+    try:
+        demo_rate_limiter.verificar(chave)
+    except RateLimitExceeded:
+        mensagem = "Muitas a\u00e7\u00f5es em pouco tempo. Aguarde alguns minutos e tente novamente."
+
+        if session.get("usuario_sigla"):
+            return redirect(url_for("home", mensagem=mensagem, tipo="warning"))
+
+        return (
+            render_template(
+                "login.html",
+                mensagem=mensagem,
+                tipo_mensagem="warning",
+                proximo=request.form.get("next", ""),
+                primeiro_acesso_disponivel=False,
+            ),
+            429,
+        )
+
+    return None
 
 
 def usuario_eh_ti(tipo_usuario=None):
@@ -527,6 +570,15 @@ def logout():
 
 @app.route("/primeiro-acesso", methods=["GET", "POST"])
 def primeiro_acesso():
+    if app.config["DEMO_DATA_ENABLED"]:
+        return redirect(
+            url_for(
+                "login",
+                mensagem="Na demo p\u00fablica, os acessos de teste j\u00e1 ficam prontos.",
+                tipo="warning",
+            )
+        )
+
     if existe_usuario_ti():
         return redirect(
             url_for(
@@ -591,7 +643,10 @@ def gerenciar_usuarios():
     mensagem = request.args.get("mensagem")
     tipo_mensagem = request.args.get("tipo", "success")
 
-    if request.method == "POST":
+    if request.method == "POST" and app.config["DEMO_DATA_ENABLED"]:
+        mensagem = "Na demo p\u00fablica, os usu\u00e1rios ficam fixos para manter o ambiente organizado."
+        tipo_mensagem = "warning"
+    elif request.method == "POST":
         sigla = normalizar_sigla_professor(request.form.get("sigla", ""))
         senha = request.form.get("senha", "")
         tipo = request.form.get("tipo", "professor")
