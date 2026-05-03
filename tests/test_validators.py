@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from validators import normalizar_sigla_professor
 from validators import normalizar_som
 from validators import validar_requisicao_computador
@@ -57,6 +59,22 @@ def test_valida_reserva_com_dados_validos():
     assert erro is None
 
 
+def test_bloqueia_reserva_em_horario_que_ja_passou():
+    erro = validar_reserva(
+        "Fundamental",
+        "11",
+        "2026-05-04",
+        salas=SALAS,
+        horarios_por_inicio=HORARIOS_POR_INICIO,
+        horario="07:25",
+        bloquear_horario_passado=True,
+        agora=datetime(2026, 5, 4, 8, 0),
+        fuso_horario=None,
+    )
+
+    assert erro == "Esse hor\u00e1rio j\u00e1 passou. Selecione uma aula futura."
+
+
 def test_bloqueia_reserva_com_sala_invalida():
     erro = validar_reserva(
         "Fundamental",
@@ -86,6 +104,28 @@ def test_valida_requisicao_de_computador_com_quantidade():
     assert erro is None
     assert quantidade == 10
     assert local == "11"
+
+
+def test_bloqueia_requisicao_em_horario_que_ja_passou():
+    erro, quantidade, local = validar_requisicao_computador(
+        "Fundamental",
+        "notebook",
+        "11",
+        "2026-05-04",
+        "10",
+        salas=SALAS,
+        recursos_computadores=RECURSOS_COMPUTADORES,
+        horarios_por_inicio=HORARIOS_POR_INICIO,
+        limite_computadores_por_reserva=15,
+        horario="07:25",
+        bloquear_horario_passado=True,
+        agora=datetime(2026, 5, 4, 8, 0),
+        fuso_horario=None,
+    )
+
+    assert erro == "Esse hor\u00e1rio j\u00e1 passou. Selecione uma aula futura."
+    assert quantidade is None
+    assert local is None
 
 
 def test_valida_requisicao_de_laboratorio_com_local_fixo():

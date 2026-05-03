@@ -21,6 +21,7 @@ class Config:
         os.environ.get("DEMO_RATE_LIMIT_WINDOW_SECONDS", "600")
     )
     DEMO_RESET_INTERVAL_HOURS = int(os.environ.get("DEMO_RESET_INTERVAL_HOURS", "6"))
+    APP_TIMEZONE = os.environ.get("APP_TIMEZONE", "America/Sao_Paulo")
     FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "1").lower() in {
         "1",
         "true",

@@ -44,6 +44,7 @@ from serializers import marcar_permissoes_reservas as marcar_perm_reservas
 from serializers import rotulo_local_computador as rotulo_local_computador_serializer
 from serializers import serializar_requisicao_computador as serializar_req_comp
 from serializers import serializar_reserva as serializar_reserva_db
+from time_rules import agora_no_fuso, filtrar_horarios_futuros
 from usuarios import buscar_usuario_por_sigla as buscar_usuario_por_sigla_db
 from usuarios import criar_usuario as criar_usuario_db
 from usuarios import existe_usuario_ti as existe_usuario_ti_db
@@ -61,6 +62,27 @@ demo_rate_limiter = DemoRateLimiter(
 
 def conectar():
     return abrir_conexao(app.config["DATABASE_PATH"])
+
+
+def agora_sistema():
+    return agora_no_fuso(app.config["APP_TIMEZONE"])
+
+
+def hoje_sistema():
+    return agora_sistema().date()
+
+
+def data_hoje_sistema():
+    return hoje_sistema().isoformat()
+
+
+def filtrar_aulas_futuras(data_referencia, aulas):
+    return filtrar_horarios_futuros(
+        data_referencia,
+        aulas,
+        agora=agora_sistema(),
+        fuso_horario=app.config["APP_TIMEZONE"],
+    )
 
 
 criar_tabelas(app.config["DATABASE_PATH"])
@@ -313,6 +335,7 @@ def validar_dados_requisicao_computador(
     data_requisicao,
     quantidade,
     horario=None,
+    bloquear_horario_passado=False,
 ):
     return validar_requisicao_computador(
         nivel,
@@ -325,6 +348,9 @@ def validar_dados_requisicao_computador(
         horarios_por_inicio=HORARIOS_POR_INICIO,
         limite_computadores_por_reserva=LIMITE_COMPUTADORES_POR_RESERVA,
         horario=horario,
+        bloquear_horario_passado=bloquear_horario_passado,
+        agora=agora_sistema(),
+        fuso_horario=app.config["APP_TIMEZONE"],
     )
 
 
@@ -360,7 +386,13 @@ def buscar_reserva_por_id(reserva_id):
     return buscar_reserva_db(conectar, serializar_reserva, reserva_id)
 
 
-def validar_dados_reserva(nivel, sala, data_reserva, horario=None):
+def validar_dados_reserva(
+    nivel,
+    sala,
+    data_reserva,
+    horario=None,
+    bloquear_horario_passado=False,
+):
     return validar_reserva(
         nivel,
         sala,
@@ -368,6 +400,9 @@ def validar_dados_reserva(nivel, sala, data_reserva, horario=None):
         salas=SALAS,
         horarios_por_inicio=HORARIOS_POR_INICIO,
         horario=horario,
+        bloquear_horario_passado=bloquear_horario_passado,
+        agora=agora_sistema(),
+        fuso_horario=app.config["APP_TIMEZONE"],
     )
 
 
@@ -499,7 +534,7 @@ def buscar_requisicoes_computadores_relatorio(
 
 
 def montar_dados_relatorio_geral():
-    data_hoje = date.today().isoformat()
+    data_hoje = data_hoje_sistema()
     data_inicial = request.args.get("data_inicial") or data_hoje
     data_final = request.args.get("data_final") or data_inicial
     sigla = normalizar_sigla_professor(request.args.get("sigla", ""))
@@ -595,14 +630,14 @@ def marcar_proximo_horario_monitor(tarefas, data_filtro, hora_teste=""):
     for tarefa in tarefas:
         tarefa["destaque_proximo"] = False
 
-    if data_filtro != date.today().isoformat() and not hora_teste:
+    if data_filtro != data_hoje_sistema() and not hora_teste:
         return ""
 
     if hora_teste:
         hora_simulada = datetime.strptime(hora_teste, "%H:%M")
         minuto_atual = hora_simulada.hour * 60 + hora_simulada.minute
     else:
-        agora = datetime.now()
+        agora = agora_sistema()
         minuto_atual = agora.hour * 60 + agora.minute
 
     proximos = [
@@ -664,7 +699,7 @@ def montar_dados_operacionais_ti(data_filtro):
         "requisicoes_computadores": requisicoes_computadores,
         "painel_computadores": painel_computadores,
         "data_selecionada": data_filtro,
-        "data_hoje": date.today().isoformat(),
+        "data_hoje": data_hoje_sistema(),
         "hora_teste": hora_teste,
         "proximo_horario_monitor": proximo_horario_monitor,
         "mensagem": request.args.get("mensagem"),
@@ -874,7 +909,8 @@ def home():
         recursos_computadores=RECURSOS_COMPUTADORES,
         salas=SALAS,
         horarios=HORARIOS,
-        data_hoje=date.today().isoformat(),
+        data_hoje=data_hoje_sistema(),
+        agora_sistema_iso=agora_sistema().isoformat(),
         mensagem=request.args.get("mensagem"),
         tipo_mensagem=request.args.get("tipo", "warning"),
     )
@@ -885,14 +921,14 @@ def home():
 def manual():
     return render_template(
         "manual.html",
-        data_hoje=date.today().isoformat(),
+        data_hoje=data_hoje_sistema(),
     )
 
 
 @app.route("/minhas-reservas")
 @login_obrigatorio
 def minhas_reservas():
-    hoje = date.today()
+    hoje = hoje_sistema()
     data_inicial = request.args.get("data_inicial") or hoje.isoformat()
     data_final = request.args.get("data_final") or (hoje + timedelta(days=60)).isoformat()
     sigla = session.get("usuario_sigla")
@@ -984,6 +1020,25 @@ def solicitar_computadores():
             )
         )
 
+    aulas, aulas_passadas = filtrar_aulas_futuras(data_requisicao, aulas)
+    mensagens_iniciais = []
+    tipo = "success"
+
+    if aulas_passadas:
+        tipo = "warning"
+        mensagens_iniciais.append(
+            f"{len(aulas_passadas)} hor\u00e1rio(s) ignorado(s) porque j\u00e1 passaram."
+        )
+
+    if not aulas:
+        return redirect(
+            url_for(
+                "home",
+                mensagem="Os hor\u00e1rios selecionados j\u00e1 passaram. Selecione uma aula futura.",
+                tipo="warning",
+            )
+        )
+
     conn = conectar()
     c = conn.cursor()
     resultado = registrar_requisicoes_computador(
@@ -1000,6 +1055,10 @@ def solicitar_computadores():
     conn.close()
 
     mensagens, tipo = montar_mensagens_requisicao_computador(resultado)
+    mensagens = mensagens_iniciais + mensagens
+
+    if mensagens_iniciais:
+        tipo = "warning"
 
     if not mensagens:
         tipo = "warning"
@@ -1019,7 +1078,7 @@ def solicitar_computadores():
 @app.route("/computadores/consultar")
 @login_obrigatorio
 def ver_requisicoes_computadores():
-    data_filtro = request.args.get("data") or date.today().isoformat()
+    data_filtro = request.args.get("data") or data_hoje_sistema()
     return redirect(
         url_for(
             "relatorio_ti",
@@ -1061,6 +1120,22 @@ def reservar():
 
     mensagens = []
     tipo = "success"
+
+    aulas, aulas_passadas = filtrar_aulas_futuras(data_reserva, aulas)
+    if aulas_passadas:
+        tipo = "warning"
+        mensagens.append(
+            f"{len(aulas_passadas)} hor\u00e1rio(s) ignorado(s) porque j\u00e1 passaram."
+        )
+
+    if not aulas:
+        return redirect(
+            url_for(
+                "home",
+                mensagem="Os hor\u00e1rios selecionados j\u00e1 passaram. Selecione uma aula futura.",
+                tipo="warning",
+            )
+        )
 
     conn = conectar()
     c = conn.cursor()
@@ -1155,7 +1230,7 @@ def reservar():
 @app.route("/reservas")
 @login_obrigatorio
 def ver_reservas():
-    data_filtro = request.args.get("data") or date.today().isoformat()
+    data_filtro = request.args.get("data") or data_hoje_sistema()
     reservas, disponibilidade = buscar_reservas_por_data(data_filtro)
     reservas = marcar_permissoes_reservas(reservas)
     painel = montar_painel_disponibilidade(disponibilidade)
@@ -1165,7 +1240,7 @@ def ver_reservas():
         reservas=reservas,
         painel=painel,
         data_selecionada=data_filtro,
-        data_hoje=date.today().isoformat(),
+        data_hoje=data_hoje_sistema(),
         mensagem=request.args.get("mensagem"),
         tipo_mensagem=request.args.get("tipo", "success"),
     )
@@ -1183,7 +1258,7 @@ def editar_reserva(reserva_id):
             "ver_reservas",
             "Reserva n\u00e3o encontrada.",
             "warning",
-            data=date.today().isoformat(),
+            data=data_hoje_sistema(),
         )
 
     if not usuario_pode_gerenciar_reserva(reserva):
@@ -1225,6 +1300,7 @@ def editar_reserva(reserva_id):
             dados_formulario["sala"],
             dados_formulario["data"],
             dados_formulario["horario"],
+            bloquear_horario_passado=True,
         )
 
         if erro_validacao:
@@ -1307,7 +1383,7 @@ def excluir_reserva(reserva_id):
             "ver_reservas",
             "Reserva n\u00e3o encontrada.",
             "warning",
-            data=date.today().isoformat(),
+            data=data_hoje_sistema(),
         )
 
     if not usuario_pode_gerenciar_reserva(reserva):
@@ -1346,14 +1422,14 @@ def excluir_reserva(reserva_id):
 @app.route("/painel-ti")
 @ti_obrigatorio
 def painel_ti():
-    data_filtro = request.args.get("data") or date.today().isoformat()
+    data_filtro = request.args.get("data") or data_hoje_sistema()
     return redirect(url_for("monitor_ti", data=data_filtro))
 
 
 @app.route("/monitor-ti")
 @ti_obrigatorio
 def monitor_ti():
-    data_filtro = request.args.get("data") or date.today().isoformat()
+    data_filtro = request.args.get("data") or data_hoje_sistema()
     return render_template(
         "monitor_ti.html",
         **montar_dados_operacionais_ti(data_filtro),
@@ -1398,8 +1474,8 @@ def editar_requisicao_computador(requisicao_id):
             "relatorio_ti",
             "Requisi\u00e7\u00e3o de computadores n\u00e3o encontrada.",
             "warning",
-            data_inicial=date.today().isoformat(),
-            data_final=date.today().isoformat(),
+            data_inicial=data_hoje_sistema(),
+            data_final=data_hoje_sistema(),
         )
 
     if not usuario_pode_gerenciar_por_sigla(requisicao["sigla"]):
@@ -1443,6 +1519,7 @@ def editar_requisicao_computador(requisicao_id):
             dados_formulario["data"],
             dados_formulario["quantidade"],
             dados_formulario["horario"],
+            bloquear_horario_passado=True,
         )
 
         if erro_validacao:
@@ -1541,8 +1618,8 @@ def excluir_requisicao_computador(requisicao_id):
             "relatorio_ti",
             "Requisi\u00e7\u00e3o de computadores n\u00e3o encontrada.",
             "warning",
-            data_inicial=date.today().isoformat(),
-            data_final=date.today().isoformat(),
+            data_inicial=data_hoje_sistema(),
+            data_final=data_hoje_sistema(),
         )
 
     if not usuario_pode_gerenciar_por_sigla(requisicao["sigla"]):
@@ -1587,7 +1664,7 @@ def excluir_requisicao_computador(requisicao_id):
 @app.route("/computadores/relatorio-ti")
 @ti_obrigatorio
 def relatorio_computadores_ti():
-    data_hoje = date.today().isoformat()
+    data_hoje = data_hoje_sistema()
     data_inicial = request.args.get("data_inicial") or data_hoje
     data_final = request.args.get("data_final") or data_inicial
     sigla = normalizar_sigla_professor(request.args.get("sigla", ""))

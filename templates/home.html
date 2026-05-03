@@ -144,6 +144,23 @@ const locaisComputadoresOcupados = {{ locais_computadores_ocupados | tojson | sa
 const horarios = {{ horarios | tojson | safe }};
 const salasPorNivel = {{ salas | tojson | safe }};
 const recursosComputadores = {{ recursos_computadores | tojson | safe }};
+const agoraSistemaIso = {{ agora_sistema_iso | tojson | safe }};
+const agoraSistemaInicialMs = new Date(agoraSistemaIso).getTime();
+const inicioTelaMs = Date.now();
+const fusoSistema = (agoraSistemaIso.match(/([+-]\d{2}:\d{2})$/) || ["", ""])[1];
+
+function agoraSistemaAtual() {
+    return new Date(agoraSistemaInicialMs + (Date.now() - inicioTelaMs));
+}
+
+function horarioJaPassou(dataSelecionada, horario) {
+    if (!dataSelecionada || !horario || Number.isNaN(agoraSistemaInicialMs)) {
+        return false;
+    }
+
+    const inicioAula = new Date(`${dataSelecionada}T${horario}:00${fusoSistema}`);
+    return inicioAula <= agoraSistemaAtual();
+}
 
 function preencherSelect(select, opcoes, valorSelecionado) {
     select.innerHTML = "";
@@ -335,13 +352,16 @@ function atualizarAulas() {
         let bloqueado = false;
         const detalhes = [];
 
-        if (incluirProjetor) {
+        if (horarioJaPassou(dataSelecionada, faixa.inicio)) {
+            bloqueado = true;
+            detalhes.push("Hor\u00e1rio j\u00e1 passou");
+        } else if (incluirProjetor) {
             const statusProjetor = avaliarProjetor(dataSelecionada, faixa, nivel, sala);
             bloqueado = bloqueado || statusProjetor.bloqueado;
             detalhes.push(statusProjetor.detalhe);
         }
 
-        if (incluirComputador) {
+        if (!bloqueado && incluirComputador) {
             const statusComputador = avaliarComputador(
                 dataSelecionada,
                 faixa,
@@ -356,6 +376,7 @@ function atualizarAulas() {
 
         const item = document.createElement("label");
         item.className = "checkbox-option";
+        item.classList.toggle("is-disabled", bloqueado);
         item.innerHTML = `
             <input type="checkbox" name="aulas" value="${faixa.inicio}" ${bloqueado ? "disabled" : ""}>
             <span>${faixa.label} (${faixa.inicio} - ${faixa.fim})</span>

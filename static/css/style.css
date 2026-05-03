@@ -369,6 +369,16 @@ a:hover {
     color: #94a3b8;
 }
 
+.checkbox-option.is-disabled {
+    opacity: 0.62;
+    cursor: not-allowed;
+}
+
+.checkbox-option.is-disabled span,
+.checkbox-option.is-disabled small {
+    color: #64748b;
+}
+
 input[type="checkbox"] {
     width: auto;
     margin: 0;

@@ -1,5 +1,7 @@
 from datetime import date
 
+from time_rules import horario_ja_passou
+
 
 def normalizar_som(valor):
     if valor in {"Nao", "N\u00e3o", "N\u00c3\u00a3o"}:
@@ -37,6 +39,9 @@ def validar_requisicao_computador(
     horarios_por_inicio,
     limite_computadores_por_reserva,
     horario=None,
+    bloquear_horario_passado=False,
+    agora=None,
+    fuso_horario=None,
 ):
     if nivel not in salas:
         return "Selecione um n\u00edvel v\u00e1lido.", None, None
@@ -99,6 +104,18 @@ def validar_requisicao_computador(
             None,
         )
 
+    if (
+        horario is not None
+        and bloquear_horario_passado
+        and horario_ja_passou(
+            data_requisicao,
+            horario,
+            agora=agora,
+            fuso_horario=fuso_horario,
+        )
+    ):
+        return "Esse hor\u00e1rio j\u00e1 passou. Selecione uma aula futura.", None, None
+
     return None, quantidade_int, local_normalizado
 
 
@@ -110,6 +127,9 @@ def validar_reserva(
     salas,
     horarios_por_inicio,
     horario=None,
+    bloquear_horario_passado=False,
+    agora=None,
+    fuso_horario=None,
 ):
     if nivel not in salas:
         return "Selecione um n\u00edvel v\u00e1lido."
@@ -127,5 +147,17 @@ def validar_reserva(
 
     if horario is not None and horario not in horarios_por_inicio[nivel]:
         return "Selecione um hor\u00e1rio v\u00e1lido para o n\u00edvel escolhido."
+
+    if (
+        horario is not None
+        and bloquear_horario_passado
+        and horario_ja_passou(
+            data_reserva,
+            horario,
+            agora=agora,
+            fuso_horario=fuso_horario,
+        )
+    ):
+        return "Esse hor\u00e1rio j\u00e1 passou. Selecione uma aula futura."
 
     return None

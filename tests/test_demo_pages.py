@@ -1,5 +1,6 @@
 import importlib
 import sys
+from datetime import datetime
 
 
 def carregar_app_demo(tmp_path, monkeypatch):
@@ -66,3 +67,36 @@ def test_telas_antigas_redirecionam_para_fluxo_consolidado(tmp_path, monkeypatch
     assert consulta.headers["Location"].startswith("/relatorio-ti")
     assert painel.status_code == 302
     assert painel.headers["Location"] == "/monitor-ti?data=2026-05-04"
+
+
+def test_reserva_nao_salva_horario_que_ja_passou(tmp_path, monkeypatch):
+    app = carregar_app_demo(tmp_path, monkeypatch)
+    monkeypatch.setattr(app, "agora_sistema", lambda: datetime(2026, 5, 4, 8, 0))
+    client = app.app.test_client()
+
+    client.post("/login", data={"sigla": "ANA", "senha": "demo123"})
+    resposta = client.post(
+        "/reservar",
+        data={
+            "nivel": "Fundamental",
+            "data": "2026-05-04",
+            "incluir_projetor": "on",
+            "sala": "17",
+            "aulas": ["07:25"],
+        },
+    )
+
+    conn = app.conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT COUNT(*)
+        FROM reservas
+        WHERE data = '2026-05-04' AND horario = '07:25' AND sala = '17'
+        """
+    )
+    total = cursor.fetchone()[0]
+    conn.close()
+
+    assert resposta.status_code == 302
+    assert total == 0
