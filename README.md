@@ -1,47 +1,55 @@
-# Portal de Reservas
+# Portal de Reservas de Equipamentos
 
-Sistema web interno para reservas de projetores e computadores em ambiente escolar. Substitui controles feitos em papel, planilha e WhatsApp por um fluxo digital unico.
+Sistema web para organizar reservas de projetores, computadores e sala de informatica em ambiente escolar.
 
-> Versao de demonstracao com dados ficticios para teste.
+A ideia do projeto e tirar esse controle de planilhas, papel e mensagens soltas, deixando professores e equipe de TI trabalhando no mesmo fluxo.
 
----
+Demo online: [projetores-demo.onrender.com](https://projetores-demo.onrender.com/login)
+
+## Acessos de teste
+
+| Perfil | Usuario | Senha |
+|---|---|---|
+| Professor | ANA | demo123 |
+| Equipe de TI | TEC | admin123 |
+
+Os dados da demo sao ficticios. O ambiente online usa acessos fixos e refaz os dados periodicamente para manter a demonstracao limpa.
 
 ## O que o sistema faz
 
-**Professores** reservam projetores e computadores pelo sistema.  
-**Equipe de TI** acompanha um painel com tarefas organizadas por horario e controle de disponibilidade em tempo real.
-
-O sistema impede conflitos de horario automaticamente e controla o limite real de equipamentos disponiveis.
-
----
+- Permite reservar projetores, notebooks, Chromebooks e a Sala 15.
+- Bloqueia conflitos de horario, sala e disponibilidade de equipamentos.
+- Mostra ao professor as proprias reservas em uma tela separada.
+- Gera um monitor operacional para a equipe de TI acompanhar entregas, trocas e retiradas.
+- Consolida as solicitacoes em um relatorio geral com exportacao para Excel.
 
 ## Tecnologias
 
-Python - Flask - SQLite - HTML - CSS - JavaScript
+- Python
+- Flask
+- SQLite
+- HTML, CSS e JavaScript
+- Gunicorn
+- Render
 
----
-
-## Como rodar
+## Como rodar localmente
 
 ```bash
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 python app.py
 ```
 
-Acesse em `http://127.0.0.1:5001/login`
+Depois acesse:
 
-| Usuario | Senha | Perfil |
-|---|---|---|
-| ANA | demo123 | Professor |
-| TEC | admin123 | Equipe TI |
+```txt
+http://127.0.0.1:5001/login
+```
 
-Ao iniciar, o sistema cria o banco local e preenche dados ficticios de demonstracao.
-
-Na versao online, a demo usa acessos fixos, bloqueia novos usuarios e refaz os dados ficticios periodicamente para manter o ambiente limpo.
-
----
+Ao iniciar, o sistema cria o banco local automaticamente e preenche dados ficticios para teste.
 
 ## Autor
 
-**Gustavo Gurtler**  
+Gustavo Gurtler  
 [LinkedIn](https://linkedin.com/in/gustavo-gurtler1) - [Portfolio](https://gustavogurtler.github.io/portfolio)
