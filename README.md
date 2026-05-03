@@ -32,22 +32,7 @@ Os dados da demo sao ficticios. O ambiente online usa acessos fixos e refaz os d
 - Gunicorn
 - Render
 
-## Como rodar localmente
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
-```
-
-Depois acesse:
-
-```txt
-http://127.0.0.1:5001/login
-```
-
-Ao iniciar, o sistema cria o banco local automaticamente e preenche dados ficticios para teste.
+O codigo esta disponivel para consulta neste repositorio. A demonstracao principal pode ser acessada pelo link online.
 
 ## Autor
 
