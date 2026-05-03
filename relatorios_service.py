@@ -1,224 +1,269 @@
-def montar_relatorio_ti(reservas):
-    resumo = {
-        "total_reservas": len(reservas),
-        "total_professores": len({reserva["sigla"] for reserva in reservas}),
-        "total_salas": len(
-            {(reserva["nivel"], reserva["sala"]) for reserva in reservas}
-        ),
-        "total_com_som": sum(1 for reserva in reservas if reserva["som"] == "Sim"),
-    }
+from io import BytesIO
+from xml.sax.saxutils import escape as escapar_xml
+from zipfile import ZIP_DEFLATED, ZipFile
 
-    por_dia = {}
-    por_sigla = {}
-    por_nivel = {}
+def montar_registros_relatorio_geral(reservas, requisicoes):
+    registros = []
 
     for reserva in reservas:
-        dados_dia = por_dia.setdefault(
-            reserva["data"],
+        registros.append(
             {
-                "data": reserva["data"],
-                "total_reservas": 0,
-                "professores": set(),
-                "salas": set(),
-            },
-        )
-        dados_dia["total_reservas"] += 1
-        dados_dia["professores"].add(reserva["sigla"])
-        dados_dia["salas"].add((reserva["nivel"], reserva["sala"]))
-
-        dados_sigla = por_sigla.setdefault(
-            reserva["sigla"],
-            {
+                "id": reserva["id"],
+                "origem": "projetor",
+                "tipo": "Projetor",
                 "sigla": reserva["sigla"],
-                "total_reservas": 0,
-                "dias": set(),
-                "niveis": set(),
-            },
-        )
-        dados_sigla["total_reservas"] += 1
-        dados_sigla["dias"].add(reserva["data"])
-        dados_sigla["niveis"].add(reserva["nivel_label"])
-
-        dados_nivel = por_nivel.setdefault(
-            reserva["nivel"],
-            {
-                "nivel": reserva["nivel"],
+                "recurso": "projetor",
+                "recurso_label": "Projetor",
+                "quantidade": 1,
+                "quantidade_label": "1 projetor",
+                "local_label": reserva["sala_label"],
+                "data": reserva["data"],
+                "horario": reserva["horario"],
+                "horario_fim": reserva["horario_fim"],
+                "aula_label": reserva["aula_label"],
                 "nivel_label": reserva["nivel_label"],
-                "total_reservas": 0,
-                "total_com_som": 0,
-                "professores": set(),
-                "salas": set(),
-            },
+                "detalhe": "Com som" if reserva["som"] == "Sim" else "",
+            }
         )
-        dados_nivel["total_reservas"] += 1
-        dados_nivel["total_com_som"] += int(reserva["som"] == "Sim")
-        dados_nivel["professores"].add(reserva["sigla"])
-        dados_nivel["salas"].add(reserva["sala_label"])
-
-    dias = sorted(
-        (
-            {
-                "data": item["data"],
-                "total_reservas": item["total_reservas"],
-                "total_professores": len(item["professores"]),
-                "total_salas": len(item["salas"]),
-            }
-            for item in por_dia.values()
-        ),
-        key=lambda item: item["data"],
-    )
-
-    siglas = sorted(
-        (
-            {
-                "sigla": item["sigla"],
-                "total_reservas": item["total_reservas"],
-                "total_dias": len(item["dias"]),
-                "niveis": ", ".join(sorted(item["niveis"])),
-            }
-            for item in por_sigla.values()
-        ),
-        key=lambda item: (-item["total_reservas"], item["sigla"]),
-    )
-
-    niveis = sorted(
-        (
-            {
-                "nivel": item["nivel"],
-                "nivel_label": item["nivel_label"],
-                "total_reservas": item["total_reservas"],
-                "total_com_som": item["total_com_som"],
-                "total_professores": len(item["professores"]),
-                "total_salas": len(item["salas"]),
-            }
-            for item in por_nivel.values()
-        ),
-        key=lambda item: item["nivel_label"],
-    )
-
-    return {
-        "resumo": resumo,
-        "por_dia": dias,
-        "por_sigla": siglas,
-        "por_nivel": niveis,
-    }
-
-
-def montar_relatorio_computadores_ti(requisicoes):
-    resumo = {
-        "total_requisicoes": len(requisicoes),
-        "total_itens": sum(requisicao["quantidade"] for requisicao in requisicoes),
-        "total_professores": len({requisicao["sigla"] for requisicao in requisicoes}),
-        "total_locais": len(
-            {
-                (
-                    requisicao["nivel"],
-                    requisicao["local"],
-                    requisicao["recurso"],
-                )
-                for requisicao in requisicoes
-            }
-        ),
-    }
-
-    por_dia = {}
-    por_sigla = {}
-    por_recurso = {}
 
     for requisicao in requisicoes:
-        dados_dia = por_dia.setdefault(
-            requisicao["data"],
+        registros.append(
             {
-                "data": requisicao["data"],
-                "total_requisicoes": 0,
-                "total_itens": 0,
-                "professores": set(),
-            },
-        )
-        dados_dia["total_requisicoes"] += 1
-        dados_dia["total_itens"] += requisicao["quantidade"]
-        dados_dia["professores"].add(requisicao["sigla"])
-
-        dados_sigla = por_sigla.setdefault(
-            requisicao["sigla"],
-            {
+                "id": requisicao["id"],
+                "origem": "computador",
+                "tipo": (
+                    "Sala 15"
+                    if requisicao["recurso"] == "laboratorio_sala15"
+                    else "Computador"
+                ),
                 "sigla": requisicao["sigla"],
-                "total_requisicoes": 0,
-                "total_itens": 0,
-                "dias": set(),
-                "recursos": set(),
-            },
-        )
-        dados_sigla["total_requisicoes"] += 1
-        dados_sigla["total_itens"] += requisicao["quantidade"]
-        dados_sigla["dias"].add(requisicao["data"])
-        dados_sigla["recursos"].add(requisicao["recurso_label"])
-
-        dados_recurso = por_recurso.setdefault(
-            requisicao["recurso"],
-            {
                 "recurso": requisicao["recurso"],
                 "recurso_label": requisicao["recurso_label"],
-                "capacidade_total": requisicao["recurso_total"],
-                "capacidade_label": requisicao["capacidade_label"],
-                "total_requisicoes": 0,
-                "total_itens": 0,
-                "professores": set(),
-                "locais": set(),
+                "quantidade": requisicao["quantidade"],
+                "quantidade_label": requisicao["quantidade_label"],
+                "local_label": requisicao["local_label"],
+                "data": requisicao["data"],
+                "horario": requisicao["horario"],
+                "horario_fim": requisicao["horario_fim"],
+                "aula_label": requisicao["aula_label"],
+                "nivel_label": requisicao["nivel_label"],
+                "detalhe": requisicao.get("descricao") or "",
+            }
+        )
+
+    return sorted(
+        registros,
+        key=lambda item: (
+            item["data"],
+            item["nivel_label"],
+            item["horario"],
+            item["tipo"],
+            item["local_label"],
+            item["sigla"],
+        ),
+    )
+
+
+def montar_relatorio_geral_ti(registros):
+    resumo = {
+        "total_solicitacoes": len(registros),
+        "total_professores": len({item["sigla"] for item in registros}),
+        "solicitacoes_projetor": sum(
+            1 for item in registros if item["origem"] == "projetor"
+        ),
+        "solicitacoes_computadores": sum(
+            1 for item in registros if item["origem"] == "computador"
+        ),
+    }
+
+    por_sigla = {}
+
+    for item in registros:
+        dados_sigla = por_sigla.setdefault(
+            item["sigla"],
+            {
+                "sigla": item["sigla"],
+                "total_solicitacoes": 0,
+                "projetores": 0,
+                "chromebooks": 0,
+                "notebooks": 0,
+                "sala15": 0,
+                "dias": set(),
             },
         )
-        dados_recurso["total_requisicoes"] += 1
-        dados_recurso["total_itens"] += requisicao["quantidade"]
-        dados_recurso["professores"].add(requisicao["sigla"])
-        dados_recurso["locais"].add(requisicao["local_label"])
-
-    dias = sorted(
-        (
-            {
-                "data": item["data"],
-                "total_requisicoes": item["total_requisicoes"],
-                "total_itens": item["total_itens"],
-                "total_professores": len(item["professores"]),
-            }
-            for item in por_dia.values()
-        ),
-        key=lambda item: item["data"],
-    )
+        dados_sigla["total_solicitacoes"] += 1
+        dados_sigla["projetores"] += int(item["origem"] == "projetor")
+        dados_sigla["chromebooks"] += int(item["recurso"] == "chromebook")
+        dados_sigla["notebooks"] += int(item["recurso"] == "notebook_samsung")
+        dados_sigla["sala15"] += int(item["recurso"] == "laboratorio_sala15")
+        dados_sigla["dias"].add(item["data"])
 
     siglas = sorted(
         (
             {
                 "sigla": item["sigla"],
-                "total_requisicoes": item["total_requisicoes"],
-                "total_itens": item["total_itens"],
+                "total_solicitacoes": item["total_solicitacoes"],
+                "projetores": item["projetores"],
+                "chromebooks": item["chromebooks"],
+                "notebooks": item["notebooks"],
+                "sala15": item["sala15"],
                 "total_dias": len(item["dias"]),
-                "recursos": ", ".join(sorted(item["recursos"])),
             }
             for item in por_sigla.values()
         ),
-        key=lambda item: (-item["total_itens"], item["sigla"]),
-    )
-
-    recursos = sorted(
-        (
-            {
-                "recurso": item["recurso"],
-                "recurso_label": item["recurso_label"],
-                "capacidade_total": item["capacidade_total"],
-                "capacidade_label": item["capacidade_label"],
-                "total_requisicoes": item["total_requisicoes"],
-                "total_itens": item["total_itens"],
-                "total_professores": len(item["professores"]),
-                "total_locais": len(item["locais"]),
-            }
-            for item in por_recurso.values()
-        ),
-        key=lambda item: item["recurso_label"],
+        key=lambda item: (-item["total_solicitacoes"], item["sigla"]),
     )
 
     return {
         "resumo": resumo,
-        "por_dia": dias,
         "por_sigla": siglas,
-        "por_recurso": recursos,
     }
+
+
+def _coluna_excel(numero):
+    letras = ""
+    while numero:
+        numero, resto = divmod(numero - 1, 26)
+        letras = chr(65 + resto) + letras
+    return letras
+
+
+def _celula_texto_excel(referencia, valor):
+    texto = "" if valor is None else str(valor)
+    return (
+        f'<c r="{referencia}" t="inlineStr">'
+        f"<is><t>{escapar_xml(texto)}</t></is>"
+        "</c>"
+    )
+
+
+def _linhas_planilha_excel(cabecalhos, linhas):
+    todas_linhas = [cabecalhos] + linhas
+    linhas_xml = []
+
+    for indice_linha, valores in enumerate(todas_linhas, start=1):
+        celulas = []
+        for indice_coluna, valor in enumerate(valores, start=1):
+            referencia = f"{_coluna_excel(indice_coluna)}{indice_linha}"
+            celulas.append(_celula_texto_excel(referencia, valor))
+        linhas_xml.append(f'<row r="{indice_linha}">{"".join(celulas)}</row>')
+
+    return "".join(linhas_xml)
+
+
+def _xml_planilha_excel(cabecalhos, linhas):
+    total_linhas = max(1, len(linhas) + 1)
+    total_colunas = max(1, len(cabecalhos))
+    dimensao = f"A1:{_coluna_excel(total_colunas)}{total_linhas}"
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<dimension ref="{dimensao}"/>
+<sheetViews><sheetView workbookViewId="0"/></sheetViews>
+<sheetFormatPr defaultRowHeight="15"/>
+<sheetData>{_linhas_planilha_excel(cabecalhos, linhas)}</sheetData>
+</worksheet>"""
+
+
+def gerar_xlsx_relatorio_geral_ti(registros, relatorio):
+    resumo_cabecalhos = [
+        "Sigla",
+        "Solicitacoes",
+        "Projetor",
+        "Chromebook",
+        "Notebook",
+        "Sala 15",
+        "Dias",
+    ]
+    resumo_linhas = [
+        [
+            item["sigla"],
+            item["total_solicitacoes"],
+            item["projetores"],
+            item["chromebooks"],
+            item["notebooks"],
+            item["sala15"],
+            item["total_dias"],
+        ]
+        for item in relatorio["por_sigla"]
+    ]
+
+    detalhes_cabecalhos = [
+        "Data",
+        "Sigla",
+        "Recurso",
+        "Quantidade",
+        "Local",
+        "Horario",
+        "Aula",
+        "Nivel",
+    ]
+    detalhes_linhas = [
+        [
+            item["data"],
+            item["sigla"],
+            item["recurso_label"],
+            item["quantidade_label"],
+            item["local_label"],
+            (
+                f"{item['horario']} - {item['horario_fim']}"
+                if item["horario_fim"]
+                else item["horario"]
+            ),
+            item["aula_label"],
+            item["nivel_label"],
+        ]
+        for item in registros
+    ]
+
+    planilhas = [
+        ("Uso por Professor", resumo_cabecalhos, resumo_linhas),
+        ("Solicitacoes", detalhes_cabecalhos, detalhes_linhas),
+    ]
+
+    arquivo = BytesIO()
+    with ZipFile(arquivo, "w", ZIP_DEFLATED) as xlsx:
+        xlsx.writestr(
+            "[Content_Types].xml",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>""",
+        )
+        xlsx.writestr(
+            "_rels/.rels",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>""",
+        )
+        xlsx.writestr(
+            "xl/workbook.xml",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>
+<sheet name="Uso por Professor" sheetId="1" r:id="rId1"/>
+<sheet name="Solicitacoes" sheetId="2" r:id="rId2"/>
+</sheets>
+</workbook>""",
+        )
+        xlsx.writestr(
+            "xl/_rels/workbook.xml.rels",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+</Relationships>""",
+        )
+
+        for indice, (_, cabecalhos, linhas) in enumerate(planilhas, start=1):
+            xlsx.writestr(
+                f"xl/worksheets/sheet{indice}.xml",
+                _xml_planilha_excel(cabecalhos, linhas),
+            )
+
+    arquivo.seek(0)
+    return arquivo

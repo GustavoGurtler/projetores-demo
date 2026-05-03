@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Monitor da TI</title>
+</head>
+<body class="monitor-page">
+
+<main class="monitor-shell">
+    <header class="monitor-header">
+        <div>
+            <p class="monitor-kicker">Monitor da TI</p>
+            <h1>Afazeres do Dia</h1>
+            <p class="subtle">
+                Tela limpa para acompanhar entregas, trocas e retiradas em tempo real.
+                Atualiza automaticamente a cada 10 minutos.
+            </p>
+            <nav class="monitor-actions" aria-label="Atalhos do monitor">
+                <a class="page-link monitor-return" href="/">Voltar para nova reserva</a>
+                <a class="page-link" href="/relatorio-ti?data_inicial={{ data_selecionada }}&data_final={{ data_selecionada }}">Relat&oacute;rio geral</a>
+            </nav>
+            {% if hora_teste %}
+            <p class="monitor-preview-note">
+                Pr&eacute;via usando {{ hora_teste }}.
+                {% if proximo_horario_monitor %}
+                Hor&aacute;rio destacado: {{ proximo_horario_monitor }}.
+                {% else %}
+                Nenhuma tarefa futura para destacar.
+                {% endif %}
+            </p>
+            {% endif %}
+        </div>
+
+        <form class="monitor-filter" action="/monitor-ti" method="get">
+            <label for="data">Data</label>
+            <div class="monitor-filter-row">
+                <input type="date" id="data" name="data" value="{{ data_selecionada }}" required>
+                {% if hora_teste %}
+                <input type="hidden" name="hora_teste" value="{{ hora_teste }}">
+                {% endif %}
+                <button type="submit">Atualizar</button>
+            </div>
+        </form>
+    </header>
+
+    <section class="monitor-card">
+        <div class="monitor-title-row">
+            <h2>{{ data_selecionada }}</h2>
+            <div class="task-legend">
+                <span class="legend-item legend-entregar">Entregar</span>
+                <span class="legend-item legend-mover">Mover</span>
+                <span class="legend-item legend-guardar">Guardar/retirar</span>
+                <span class="legend-item legend-computer">Computadores/Sala 15</span>
+            </div>
+        </div>
+
+        {% if tarefas_do_dia %}
+        {% set tarefas_medio = tarefas_do_dia | selectattr("nivel", "equalto", "Medio") | list %}
+        {% set tarefas_fundamental = tarefas_do_dia | selectattr("nivel", "equalto", "Fundamental") | list %}
+
+        <div class="grid grid-two monitor-grid">
+            <section class="card">
+                <h3>Ensino M&eacute;dio</h3>
+                <div class="task-list">
+                    {% if tarefas_medio %}
+                        {% for tarefa in tarefas_medio %}
+                        <article class="task-item task-{{ tarefa.tipo }}{% if tarefa.destaque_proximo %} task-next{% endif %}">
+                            <div class="task-time">{{ tarefa.horario }}</div>
+                            <div class="task-body">
+                                <div class="task-meta">
+                                    <span class="status-chip info">{{ tarefa.nivel_label }}</span>
+                                    {% if tarefa.destaque_proximo %}
+                                    <span class="status-chip next-chip">Pr&oacute;ximo hor&aacute;rio</span>
+                                    {% endif %}
+                                    <span class="task-moment">{{ tarefa.momento }}</span>
+                                </div>
+                                <p>{{ tarefa.descricao }}</p>
+                            </div>
+                        </article>
+                        {% endfor %}
+                    {% else %}
+                    <p class="empty-state">Sem a&ccedil;&otilde;es para o Ensino M&eacute;dio.</p>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="card">
+                <h3>Ensino Fundamental</h3>
+                <div class="task-list">
+                    {% if tarefas_fundamental %}
+                        {% for tarefa in tarefas_fundamental %}
+                        <article class="task-item task-{{ tarefa.tipo }}{% if tarefa.destaque_proximo %} task-next{% endif %}">
+                            <div class="task-time">{{ tarefa.horario }}</div>
+                            <div class="task-body">
+                                <div class="task-meta">
+                                    <span class="status-chip info">{{ tarefa.nivel_label }}</span>
+                                    {% if tarefa.destaque_proximo %}
+                                    <span class="status-chip next-chip">Pr&oacute;ximo hor&aacute;rio</span>
+                                    {% endif %}
+                                    <span class="task-moment">{{ tarefa.momento }}</span>
+                                </div>
+                                <p>{{ tarefa.descricao }}</p>
+                            </div>
+                        </article>
+                        {% endfor %}
+                    {% else %}
+                    <p class="empty-state">Sem a&ccedil;&otilde;es para o Ensino Fundamental.</p>
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+        {% else %}
+        <p class="empty-state">Sem movimenta&ccedil;&otilde;es para {{ data_selecionada }}.</p>
+        {% endif %}
+    </section>
+</main>
+
+{% if data_selecionada == data_hoje %}
+<script>
+window.setTimeout(function () {
+    window.location.reload();
+}, 10 * 60 * 1000);
+</script>
+{% endif %}
+
+</body>
+</html>

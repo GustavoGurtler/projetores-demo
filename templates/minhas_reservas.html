@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Minhas Reservas</title>
+</head>
+<body>
+
+<div class="page">
+
+{% set retorno = request.full_path if request.query_string else request.path %}
+
+<div class="container container-wide">
+    <div class="split-layout">
+    <aside class="link-row user-links">
+        <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
+        <a class="page-link" href="/">Nova reserva</a>
+        <a class="page-link" href="/minhas-reservas">Minhas reservas</a>
+        <a class="page-link" href="/reservas?data={{ data_hoje }}">Ver reservas do dia</a>
+        <a class="page-link" href="/manual">Manual do professor</a>
+        {% if usuario_eh_ti %}
+        <a class="page-link" href="/monitor-ti?data={{ data_hoje }}">Monitor da TI</a>
+        <a class="page-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">Relat&oacute;rio Geral</a>
+        <a class="page-link" href="/usuarios">Gerenciar acessos</a>
+        {% endif %}
+        <a class="page-link" href="/logout">Sair</a>
+    </aside>
+
+    <div class="split-main">
+    <h1>Minhas Reservas</h1>
+    <p class="subtle">
+        Confira suas pr&oacute;ximas solicita&ccedil;&otilde;es de projetor, computadores e Sala 15.
+    </p>
+
+    <form class="inline-form" action="/minhas-reservas" method="get">
+        <div class="field-grow">
+            <label for="data_inicial">Data inicial</label>
+            <input type="date" id="data_inicial" name="data_inicial" value="{{ data_inicial }}" required>
+        </div>
+        <div class="field-grow">
+            <label for="data_final">Data final</label>
+            <input type="date" id="data_final" name="data_final" value="{{ data_final }}" required>
+        </div>
+        <button type="submit">Atualizar consulta</button>
+    </form>
+    </div>
+    </div>
+</div>
+
+{% if mensagem %}
+<div class="container alert alert-{{ tipo_mensagem }}">
+    <p>{{ mensagem }}</p>
+</div>
+{% endif %}
+
+<div class="stats-grid">
+    <article class="card stat-card">
+        <span class="stat-label">Solicita&ccedil;&otilde;es</span>
+        <strong class="stat-value">{{ relatorio.resumo.total_solicitacoes }}</strong>
+    </article>
+    <article class="card stat-card">
+        <span class="stat-label">Projetores</span>
+        <strong class="stat-value">{{ relatorio.resumo.solicitacoes_projetor }}</strong>
+    </article>
+    <article class="card stat-card">
+        <span class="stat-label">Computadores/Sala 15</span>
+        <strong class="stat-value">{{ relatorio.resumo.solicitacoes_computadores }}</strong>
+    </article>
+</div>
+
+<div class="container container-wide">
+    <h2>Reservas Encontradas</h2>
+
+    {% if registros %}
+    <div class="reservation-card-list">
+        {% for item in registros %}
+        <article class="reservation-card">
+            <div class="reservation-card-main">
+                <div class="reservation-card-top">
+                    <span class="status-chip info">{{ item.recurso_label }}</span>
+                    <strong>{{ item.data }}</strong>
+                </div>
+                <h3>{{ item.local_label }}</h3>
+                <p>
+                    {{ item.nivel_label }} &bull; {{ item.aula_label }} &bull;
+                    {{ item.horario }}{% if item.horario_fim %} - {{ item.horario_fim }}{% endif %}
+                </p>
+                <p class="subtle compact-text">
+                    Quantidade: {{ item.quantidade_label }}{% if item.detalhe %} &bull; {{ item.detalhe }}{% endif %}
+                </p>
+            </div>
+
+            <div class="table-actions reservation-actions">
+                {% if item.origem == 'projetor' %}
+                <a class="button-link button-secondary" href="{{ url_for('editar_reserva', reserva_id=item.id, next=retorno) }}">Editar</a>
+                <form action="{{ url_for('excluir_reserva', reserva_id=item.id) }}" method="post" onsubmit="return confirm('Confirma a exclus&atilde;o desta reserva?');">
+                    <input type="hidden" name="next" value="{{ retorno }}">
+                    <button type="submit" class="button-danger button-inline">Excluir</button>
+                </form>
+                {% else %}
+                <a class="button-link button-secondary" href="{{ url_for('editar_requisicao_computador', requisicao_id=item.id, next=retorno) }}">Editar</a>
+                <form action="{{ url_for('excluir_requisicao_computador', requisicao_id=item.id) }}" method="post" onsubmit="return confirm('Confirma a exclus&atilde;o desta solicita&ccedil;&atilde;o?');">
+                    <input type="hidden" name="next" value="{{ retorno }}">
+                    <button type="submit" class="button-danger button-inline">Excluir</button>
+                </form>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">Nenhuma reserva encontrada para {{ usuario_sigla }} nesse per&iacute;odo.</p>
+    {% endif %}
+</div>
+
+</div>
+
+</body>
+</html>

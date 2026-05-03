@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Manual do Professor</title>
+</head>
+<body>
+
+<div class="page">
+
+<div class="container container-wide">
+    <div class="split-layout">
+        <aside class="link-row user-links">
+            <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
+            <a class="page-link" href="/">Nova reserva</a>
+            <a class="page-link" href="/minhas-reservas">Minhas reservas</a>
+            <a class="page-link" href="/reservas?data={{ data_hoje }}">Ver reservas do dia</a>
+            <a class="page-link" href="/manual">Manual do professor</a>
+            {% if usuario_eh_ti %}
+            <a class="page-link" href="/monitor-ti?data={{ data_hoje }}">Monitor da TI</a>
+            <a class="page-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">Relat&oacute;rio Geral</a>
+            <a class="page-link" href="/usuarios">Gerenciar acessos</a>
+            {% endif %}
+            <a class="page-link" href="/logout">Sair</a>
+        </aside>
+
+        <div class="split-main">
+            <h1>Manual do Professor</h1>
+            <p class="subtle">
+                Guia r&aacute;pido para reservar projetores, solicitar computadores e consultar pedidos.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="grid">
+    <section class="card">
+        <h2>Objetivo</h2>
+        <p>
+            Centralizar as reservas de projetores, Chromebooks, notebooks e Sala 15 em um fluxo &uacute;nico.
+        </p>
+        <p class="subtle">
+            Quando projetor e computador s&atilde;o solicitados juntos, o sistema valida os dois recursos antes de salvar.
+        </p>
+    </section>
+
+    <section class="card">
+        <h2>Passo a Passo</h2>
+        <ol>
+            <li>Escolha o curso e a data da aula.</li>
+            <li>Marque se precisa de projetor, computador ou ambos.</li>
+            <li>Informe sala, recurso, quantidade e hor&aacute;rios.</li>
+            <li>Revise as aulas selecionadas e salve a solicita&ccedil;&atilde;o.</li>
+        </ol>
+    </section>
+
+    <section class="card">
+        <h2>Regras</h2>
+        <ul>
+            <li>Uma sala n&atilde;o pode ter dois projetores no mesmo hor&aacute;rio.</li>
+            <li>O sistema respeita o limite de projetores por segmento.</li>
+            <li>Computadores respeitam a disponibilidade total do recurso.</li>
+            <li>A Sala 15 fica reservada inteira para o hor&aacute;rio selecionado.</li>
+        </ul>
+    </section>
+
+    <section class="card">
+        <h2>Consultas</h2>
+        <p>
+            Use <strong>Minhas reservas</strong> para revisar, editar ou excluir suas solicita&ccedil;&otilde;es.
+        </p>
+        <p class="subtle">
+            A equipe de TI acompanha tudo pelo monitor operacional e pelo relat&oacute;rio geral.
+        </p>
+    </section>
+</div>
+
+</div>
+
+</body>
+</html>

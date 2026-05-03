@@ -12,13 +12,15 @@
 <div class="split-layout">
 <aside class="link-row user-links">
     <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
+    <a class="page-link" href="/minhas-reservas">Minhas reservas</a>
     <a class="page-link" href="/reservas?data={{ data_hoje }}">Ver reservas do dia</a>
+    <a class="page-link" href="/manual">Manual do professor</a>
     <a class="page-link" href="/computadores">Solicitar computadores</a>
     <a class="page-link" href="/computadores/consultar?data={{ data_hoje }}">Consultar computadores</a>
     {% if usuario_eh_ti %}
+    <a class="page-link" href="/monitor-ti?data={{ data_hoje }}">Monitor da TI</a>
     <a class="page-link" href="/painel-ti?data={{ data_hoje }}">Painel da TI</a>
-    <a class="page-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">Relat&oacute;rio TI</a>
-    <a class="page-link" href="/computadores/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">Relat&oacute;rio TI Computadores</a>
+    <a class="page-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">Relat&oacute;rio Geral</a>
     <a class="page-link" href="/usuarios">Gerenciar acessos</a>
     {% endif %}
     <a class="page-link" href="/logout">Sair</a>
@@ -125,7 +127,7 @@
         |
         <a class="page-link subtle-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">abrir relat&oacute;rio</a>
         |
-        <a class="page-link subtle-link" href="/computadores/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">relat&oacute;rio de computadores</a>
+        <a class="page-link subtle-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">relat&oacute;rio geral</a>
         |
         <a class="page-link subtle-link" href="/usuarios">gerenciar acessos</a>
     </p>

@@ -4,32 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <title>Relatório da TI</title>
+    <title>Relat&oacute;rio Geral da TI</title>
 </head>
 <body>
 
 <div class="page">
 
-{% set retorno = request.full_path if request.query_string else request.path %}
-
 <div class="container container-wide">
     <div class="split-layout">
     <aside class="link-row user-links">
         <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
-        <a class="page-link" href="/">Tela de reservas</a>
-        <a class="page-link" href="/computadores">Solicitar computadores</a>
-        <a class="page-link" href="/computadores/consultar?data={{ data_inicial }}">Consulta de computadores</a>
-        <a class="page-link" href="/painel-ti?data={{ data_inicial }}">Painel da TI</a>
-        <a class="page-link" href="/reservas?data={{ data_inicial }}">Consulta p&uacute;blica</a>
-        <a class="page-link" href="/computadores/relatorio-ti?data_inicial={{ data_inicial }}&data_final={{ data_final }}">Relat&oacute;rio TI Computadores</a>
+        <a class="page-link" href="/">Nova reserva</a>
+        <a class="page-link" href="/minhas-reservas">Minhas reservas</a>
+        <a class="page-link" href="/monitor-ti?data={{ data_inicial }}">Monitor da TI</a>
+        <a class="page-link" href="/reservas?data={{ data_inicial }}">Consulta de projetores</a>
         <a class="page-link" href="/usuarios">Gerenciar acessos</a>
         <a class="page-link" href="/logout">Sair</a>
     </aside>
 
     <div class="split-main">
-    <h1>Relat&oacute;rio da TI</h1>
+    <h1>Relat&oacute;rio Geral da TI</h1>
     <p class="subtle">
-        Esta vis&atilde;o interna consolida as reservas por per&iacute;odo para apoiar o acompanhamento da equipe de TI.
+        Relat&oacute;rio &uacute;nico para acompanhar quem solicitou equipamentos,
+        qual recurso foi usado e em quais dias do per&iacute;odo selecionado.
     </p>
 
     <form class="filters-grid" action="/relatorio-ti" method="get">
@@ -54,13 +51,23 @@
         </div>
 
         <div>
+            <label for="recurso">Recurso</label>
+            <select id="recurso" name="recurso">
+                <option value="">Todos</option>
+                <option value="projetor" {% if recurso == 'projetor' %}selected{% endif %}>Projetor</option>
+                {% for chave, item in recursos_computadores.items() %}
+                <option value="{{ chave }}" {% if recurso == chave %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
             <label for="sigla">Sigla</label>
             <input
                 type="text"
                 id="sigla"
                 name="sigla"
                 maxlength="3"
-                minlength="0"
                 pattern="[A-Za-z]{0,3}"
                 autocomplete="off"
                 placeholder="ABC"
@@ -70,6 +77,12 @@
         </div>
 
         <button type="submit">Atualizar relat&oacute;rio</button>
+        <a
+            class="button-link button-secondary filter-action-link"
+            href="{{ url_for('exportar_relatorio_ti_excel', data_inicial=data_inicial, data_final=data_final, nivel=nivel, recurso=recurso, sigla=sigla) }}"
+        >
+            Exportar Excel
+        </a>
     </form>
     </div>
     </div>
@@ -83,149 +96,89 @@
 
 <div class="stats-grid">
     <article class="card stat-card">
-        <span class="stat-label">Reservas no per&iacute;odo</span>
-        <strong class="stat-value">{{ relatorio.resumo.total_reservas }}</strong>
+        <span class="stat-label">Solicita&ccedil;&otilde;es</span>
+        <strong class="stat-value">{{ relatorio.resumo.total_solicitacoes }}</strong>
     </article>
     <article class="card stat-card">
-        <span class="stat-label">Professores atendidos</span>
+        <span class="stat-label">Professores</span>
         <strong class="stat-value">{{ relatorio.resumo.total_professores }}</strong>
     </article>
     <article class="card stat-card">
-        <span class="stat-label">Salas diferentes</span>
-        <strong class="stat-value">{{ relatorio.resumo.total_salas }}</strong>
+        <span class="stat-label">Reservas de projetor</span>
+        <strong class="stat-value">{{ relatorio.resumo.solicitacoes_projetor }}</strong>
     </article>
     <article class="card stat-card">
-        <span class="stat-label">Solicita&ccedil;&otilde;es com som</span>
-        <strong class="stat-value">{{ relatorio.resumo.total_com_som }}</strong>
+        <span class="stat-label">Reservas de computador/Sala 15</span>
+        <strong class="stat-value">{{ relatorio.resumo.solicitacoes_computadores }}</strong>
     </article>
 </div>
 
-<div class="grid">
-    <section class="card">
-        <h2>Resumo por N&iacute;vel</h2>
-
-        {% if relatorio.por_nivel %}
-        <div class="table-wrap">
-            <table>
-                <tr>
-                    <th>N&iacute;vel</th>
-                    <th>Reservas</th>
-                    <th>Professores</th>
-                    <th>Salas</th>
-                    <th>Com som</th>
-                </tr>
-                {% for item in relatorio.por_nivel %}
-                <tr>
-                    <td>{{ item.nivel_label }}</td>
-                    <td>{{ item.total_reservas }}</td>
-                    <td>{{ item.total_professores }}</td>
-                    <td>{{ item.total_salas }}</td>
-                    <td>{{ item.total_com_som }}</td>
-                </tr>
-                {% endfor %}
-            </table>
-        </div>
-        {% else %}
-        <p class="empty-state">Nenhum registro encontrado com os filtros informados.</p>
-        {% endif %}
-    </section>
-
-    <section class="card">
-        <h2>Resumo por Dia</h2>
-
-        {% if relatorio.por_dia %}
-        <div class="table-wrap">
-            <table>
-                <tr>
-                    <th>Data</th>
-                    <th>Reservas</th>
-                    <th>Professores</th>
-                    <th>Salas</th>
-                </tr>
-                {% for item in relatorio.por_dia %}
-                <tr>
-                    <td>{{ item.data }}</td>
-                    <td>{{ item.total_reservas }}</td>
-                    <td>{{ item.total_professores }}</td>
-                    <td>{{ item.total_salas }}</td>
-                </tr>
-                {% endfor %}
-            </table>
-        </div>
-        {% else %}
-        <p class="empty-state">Nenhuma reserva no per&iacute;odo selecionado.</p>
-        {% endif %}
-    </section>
-</div>
-
-<div class="container">
-    <h2>Resumo por Professor</h2>
+<div class="container container-wide">
+    <h2>Uso por Professor</h2>
 
     {% if relatorio.por_sigla %}
     <div class="table-wrap">
         <table>
             <tr>
                 <th>Sigla</th>
-                <th>Reservas</th>
+                <th>Solicita&ccedil;&otilde;es</th>
+                <th>Projetor</th>
+                <th>Chromebook</th>
+                <th>Notebook</th>
+                <th>Sala 15</th>
                 <th>Dias</th>
-                <th>N&iacute;veis</th>
             </tr>
             {% for item in relatorio.por_sigla %}
             <tr>
                 <td>{{ item.sigla }}</td>
-                <td>{{ item.total_reservas }}</td>
+                <td>{{ item.total_solicitacoes }}</td>
+                <td>{{ item.projetores }}</td>
+                <td>{{ item.chromebooks }}</td>
+                <td>{{ item.notebooks }}</td>
+                <td>{{ item.sala15 }}</td>
                 <td>{{ item.total_dias }}</td>
-                <td>{{ item.niveis }}</td>
             </tr>
             {% endfor %}
         </table>
     </div>
     {% else %}
-    <p class="empty-state">Sem professores para exibir no relat&oacute;rio atual.</p>
+    <p class="empty-state">Sem professores para exibir no per&iacute;odo selecionado.</p>
     {% endif %}
 </div>
 
-<div class="container">
-    <h2>Reservas Detalhadas</h2>
+<div class="container container-wide container-full">
+    <h2>Solicita&ccedil;&otilde;es do Per&iacute;odo</h2>
 
-    {% if reservas %}
-    <div class="table-wrap">
+    {% if registros %}
+    <div class="table-wrap top-scroll">
         <table>
             <tr>
-                <th>Sigla</th>
-                <th>Sala</th>
                 <th>Data</th>
+                <th>Sigla</th>
+                <th>Recurso</th>
+                <th>Quantidade</th>
+                <th>Local</th>
                 <th>Hor&aacute;rio</th>
                 <th>Aula</th>
                 <th>N&iacute;vel</th>
-                <th>Som</th>
-                <th>A&ccedil;&otilde;es</th>
             </tr>
 
-            {% for r in reservas %}
+            {% for item in registros %}
             <tr>
-                <td>{{ r.sigla }}</td>
-                <td>{{ r.sala_label }}</td>
-                <td>{{ r.data }}</td>
-                <td>{{ r.horario }}{% if r.horario_fim %} - {{ r.horario_fim }}{% endif %}</td>
-                <td>{{ r.aula_label }}</td>
-                <td>{{ r.nivel_label }}</td>
-                <td>{{ r.som }}</td>
-                <td>
-                    <div class="table-actions">
-                        <a class="button-link button-secondary" href="{{ url_for('editar_reserva', reserva_id=r.id, next=retorno) }}">Editar</a>
-                        <form action="{{ url_for('excluir_reserva', reserva_id=r.id) }}" method="post" onsubmit="return confirm('Confirma a exclus&atilde;o desta reserva?');">
-                            <input type="hidden" name="next" value="{{ retorno }}">
-                            <button type="submit" class="button-danger button-inline">Excluir</button>
-                        </form>
-                    </div>
-                </td>
+                <td>{{ item.data }}</td>
+                <td>{{ item.sigla }}</td>
+                <td>{{ item.recurso_label }}</td>
+                <td>{{ item.quantidade_label }}</td>
+                <td>{{ item.local_label }}</td>
+                <td>{{ item.horario }}{% if item.horario_fim %} - {{ item.horario_fim }}{% endif %}</td>
+                <td>{{ item.aula_label }}</td>
+                <td>{{ item.nivel_label }}</td>
             </tr>
             {% endfor %}
         </table>
     </div>
     {% else %}
-    <p class="empty-state">Nenhuma reserva encontrada para o per&iacute;odo informado.</p>
+    <p class="empty-state">Nenhuma solicita&ccedil;&atilde;o encontrada com os filtros informados.</p>
     {% endif %}
 </div>
 

@@ -4,6 +4,16 @@ from domain import FAMILIAS_PROJETORES, HORARIOS, NIVEL_LABELS, ORDEM_TIPO_TAREF
 from domain import RECURSOS_COMPUTADORES, TOTAL_PROJETORES, hora_para_minutos
 
 
+HORARIOS_ORDEM = {
+    nivel: {faixa["inicio"]: indice for indice, faixa in enumerate(faixas)}
+    for nivel, faixas in HORARIOS.items()
+}
+
+
+def formatar_horario(minutos):
+    return f"{minutos // 60:02d}:{minutos % 60:02d}"
+
+
 def montar_painel_disponibilidade_computadores(disponibilidade):
     ocupacao = {
         (nivel, horario, recurso): quantidade
@@ -327,3 +337,273 @@ def montar_tarefas_do_dia(planejamento):
             tarefa["descricao"],
         ),
     )
+
+
+def montar_tarefas_computadores(requisicoes):
+    if not requisicoes:
+        return []
+
+    intervalos = []
+    for requisicao in requisicoes:
+        if not requisicao.get("horario_fim"):
+            continue
+
+        intervalos.append(
+            {
+                "id": str(requisicao["id"]),
+                "nivel": requisicao["nivel"],
+                "nivel_label": requisicao["nivel_label"],
+                "recurso": requisicao["recurso"],
+                "recurso_label": requisicao["recurso_label"],
+                "local_label": requisicao["local_label"],
+                "quantidade_label": requisicao["quantidade_label"],
+                "quantidade": requisicao["quantidade"],
+                "usa_quantidade": requisicao["usa_quantidade"],
+                "descricao": (requisicao.get("descricao") or "").strip(),
+                "inicio": hora_para_minutos(requisicao["horario"]),
+                "fim": hora_para_minutos(requisicao["horario_fim"]),
+                "aula_inicio": requisicao["aula_label"],
+                "aula_fim": requisicao["aula_label"],
+                "aula_ordem_inicio": HORARIOS_ORDEM.get(
+                    requisicao["nivel"],
+                    {},
+                ).get(requisicao["horario"]),
+                "aula_ordem_fim": HORARIOS_ORDEM.get(
+                    requisicao["nivel"],
+                    {},
+                ).get(requisicao["horario"]),
+            }
+        )
+
+    agrupados = {}
+    for intervalo in intervalos:
+        chave = (
+            intervalo["nivel_label"],
+            intervalo["recurso"],
+            intervalo["local_label"],
+            intervalo["quantidade_label"],
+            intervalo["descricao"],
+        )
+        agrupados.setdefault(chave, []).append(intervalo)
+
+    intervalos_mesclados = []
+    for itens in agrupados.values():
+        itens_ordenados = sorted(itens, key=lambda item: item["inicio"])
+        atual = itens_ordenados[0]
+        for item in itens_ordenados[1:]:
+            aulas_consecutivas = (
+                item["nivel"] == atual["nivel"]
+                and item["aula_ordem_inicio"] is not None
+                and atual["aula_ordem_fim"] is not None
+                and item["aula_ordem_inicio"] == atual["aula_ordem_fim"] + 1
+            )
+            if item["inicio"] == atual["fim"] or aulas_consecutivas:
+                atual["fim"] = item["fim"]
+                atual["aula_fim"] = item["aula_fim"]
+                atual["aula_ordem_fim"] = item["aula_ordem_fim"]
+            else:
+                intervalos_mesclados.append(atual)
+                atual = item
+        intervalos_mesclados.append(atual)
+
+    tarefas = []
+    tarefas_por_id = {}
+    remover_ids = set()
+    complemento_recurso_labels = {
+        "chromebook": "CPD",
+        "notebook_samsung": "carrinho",
+    }
+
+    def adicionar_tarefa(tarefa):
+        tarefas.append(tarefa)
+        tarefas_por_id[tarefa["id"]] = tarefa
+
+    def ajustar_tarefa_quantidade(task_id, intervalo, quantidade_restante, tipo):
+        if quantidade_restante <= 0:
+            remover_ids.add(task_id)
+            return
+
+        tarefa = tarefas_por_id.get(task_id)
+        if not tarefa:
+            return
+
+        if tipo == "entregar":
+            tarefa["descricao"] = (
+                f"Levar {quantidade_restante} de {intervalo['recurso_label']} "
+                f"para {intervalo['local_label']}."
+                f"{intervalo['descricao_extra']}"
+            )
+        else:
+            tarefa["descricao"] = (
+                f"Retirar {quantidade_restante} de {intervalo['recurso_label']} "
+                f"da {intervalo['local_label']}."
+                f"{intervalo['descricao_extra']}"
+            )
+
+    for intervalo in intervalos_mesclados:
+        inicio_str = formatar_horario(intervalo["inicio"])
+        fim_str = formatar_horario(intervalo["fim"])
+        descricao_extra = (
+            f" Obs: {intervalo['descricao']}."
+            if intervalo["descricao"]
+            else ""
+        )
+        intervalo["descricao_extra"] = descricao_extra
+
+        if intervalo["recurso"] == "laboratorio_sala15":
+            adicionar_tarefa(
+                {
+                    "id": f"entregar:{intervalo['id']}",
+                    "tipo": "entregar",
+                    "horario": inicio_str,
+                    "ordem": intervalo["inicio"],
+                    "momento": "Ligar Sala 15",
+                    "descricao": f"Ligar Sala 15.{descricao_extra}",
+                    "nivel": intervalo["nivel"],
+                    "nivel_label": intervalo["nivel_label"],
+                }
+            )
+            adicionar_tarefa(
+                {
+                    "id": f"guardar:{intervalo['id']}",
+                    "tipo": "guardar",
+                    "horario": fim_str,
+                    "ordem": intervalo["fim"],
+                    "momento": "Desligar Sala 15",
+                    "descricao": f"Desligar Sala 15.{descricao_extra}",
+                    "nivel": intervalo["nivel"],
+                    "nivel_label": intervalo["nivel_label"],
+                }
+            )
+            continue
+
+        adicionar_tarefa(
+            {
+                "id": f"entregar:{intervalo['id']}",
+                "tipo": "entregar",
+                "horario": inicio_str,
+                "ordem": intervalo["inicio"],
+                "momento": f"Antes da {intervalo['aula_inicio']}",
+                "descricao": (
+                    f"Levar {intervalo['quantidade_label']} de "
+                    f"{intervalo['recurso_label']} para {intervalo['local_label']}."
+                    f"{descricao_extra}"
+                ),
+                "nivel": intervalo["nivel"],
+                "nivel_label": intervalo["nivel_label"],
+            }
+        )
+        adicionar_tarefa(
+            {
+                "id": f"guardar:{intervalo['id']}",
+                "tipo": "guardar",
+                "horario": fim_str,
+                "ordem": intervalo["fim"],
+                "momento": f"Ap\u00f3s a {intervalo['aula_fim']}",
+                "descricao": (
+                    f"Retirar {intervalo['quantidade_label']} de "
+                    f"{intervalo['recurso_label']} da {intervalo['local_label']}."
+                    f"{descricao_extra}"
+                ),
+                "nivel": intervalo["nivel"],
+                "nivel_label": intervalo["nivel_label"],
+            }
+        )
+
+    intervalos_por_recurso = {}
+    for intervalo in intervalos_mesclados:
+        if intervalo["recurso"] == "laboratorio_sala15":
+            continue
+        intervalos_por_recurso.setdefault(intervalo["recurso"], []).append(intervalo)
+
+    for itens in intervalos_por_recurso.values():
+        fins = {}
+        inicios = {}
+        fins_por_aula = {}
+        inicios_por_aula = {}
+
+        for intervalo in itens:
+            fins.setdefault(intervalo["fim"], []).append(intervalo)
+            inicios.setdefault(intervalo["inicio"], []).append(intervalo)
+
+            if intervalo["aula_ordem_fim"] is not None:
+                fins_por_aula.setdefault(
+                    (intervalo["nivel"], intervalo["aula_ordem_fim"]),
+                    [],
+                ).append(intervalo)
+
+            if intervalo["aula_ordem_inicio"] is not None:
+                inicios_por_aula.setdefault(
+                    (intervalo["nivel"], intervalo["aula_ordem_inicio"]),
+                    [],
+                ).append(intervalo)
+
+        def registrar_mover(origem, destino, instante):
+            if origem["local_label"] == destino["local_label"]:
+                return
+            if not origem["usa_quantidade"] or not destino["usa_quantidade"]:
+                return
+
+            quantidade_mover = min(origem["quantidade"], destino["quantidade"])
+            if quantidade_mover <= 0:
+                return
+
+            complemento_quantidade = max(0, destino["quantidade"] - quantidade_mover)
+            complemento_label = complemento_recurso_labels.get(
+                destino["recurso"],
+                destino["recurso_label"],
+            )
+            complemento_texto = (
+                f" +{complemento_quantidade} do {complemento_label}"
+                if complemento_quantidade and complemento_label
+                else ""
+            )
+            descricao_extra = (
+                f" Obs: {destino['descricao']}."
+                if destino["descricao"]
+                else ""
+            )
+            tarefas.append(
+                {
+                    "id": f"mover:{origem['id']}:{destino['id']}",
+                    "tipo": "mover",
+                    "horario": formatar_horario(instante),
+                    "ordem": instante,
+                    "momento": f"Troca para {destino['aula_inicio']}",
+                    "descricao": (
+                        f"Mover {quantidade_mover} de "
+                        f"{origem['local_label']} para {destino['local_label']}."
+                        f"{complemento_texto}"
+                        f"{descricao_extra}"
+                    ),
+                    "nivel": destino["nivel"],
+                    "nivel_label": destino["nivel_label"],
+                }
+            )
+            ajustar_tarefa_quantidade(
+                f"guardar:{origem['id']}",
+                origem,
+                origem["quantidade"] - quantidade_mover,
+                "guardar",
+            )
+            remover_ids.add(f"entregar:{destino['id']}")
+
+        for instante in set(fins.keys()) & set(inicios.keys()):
+            finais = fins.get(instante, [])
+            iniciais = inicios.get(instante, [])
+            while finais and iniciais:
+                origem = finais.pop(0)
+                destino = iniciais.pop(0)
+                registrar_mover(origem, destino, instante)
+
+        for chave, finais in list(fins_por_aula.items()):
+            nivel, ordem = chave
+            iniciais = inicios_por_aula.get((nivel, ordem + 1), [])
+            while finais and iniciais:
+                origem = finais.pop(0)
+                destino = iniciais.pop(0)
+                if origem["fim"] == destino["inicio"]:
+                    continue
+                registrar_mover(origem, destino, origem["fim"])
+
+    return [tarefa for tarefa in tarefas if tarefa["id"] not in remover_ids]

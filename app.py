@@ -1,8 +1,8 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 from functools import wraps
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from flask import Flask, redirect, render_template, request, session, url_for
+from flask import Flask, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash
 
 from computadores_service import montar_mensagens_requisicao_computador as montar_mensagens_computador_service
@@ -27,14 +27,16 @@ from domain import NIVEL_LABELS, RECURSOS_COMPUTADORES
 from domain import SALAS, TIPOS_USUARIO, TOTAL_PROJETORES
 from painel_service import gerar_planejamento_ti, montar_painel_disponibilidade
 from painel_service import montar_painel_disponibilidade_computadores
-from painel_service import montar_tarefas_do_dia
+from painel_service import montar_tarefas_computadores, montar_tarefas_do_dia
 from permissions import usuario_eh_ti as verificar_usuario_eh_ti
 from permissions import usuario_pode_gerenciar_por_sigla as verificar_permissao_sigla
 from permissions import usuario_pode_gerenciar_reserva as verificar_permissao_reserva
 from reservas_service import montar_mensagens_reserva_projetor as montar_mensagens_reserva_service
 from reservas_service import registrar_reservas_projetor as registrar_reservas_service
 from reservas_service import verificar_conflitos_reserva as verificar_conflitos_reserva_service
-from relatorios_service import montar_relatorio_computadores_ti, montar_relatorio_ti
+from relatorios_service import gerar_xlsx_relatorio_geral_ti
+from relatorios_service import montar_registros_relatorio_geral
+from relatorios_service import montar_relatorio_geral_ti
 from serializers import marcar_permissoes_requisicao_computador as marcar_perm_req_comp
 from serializers import marcar_permissoes_requisicoes_computadores as marcar_perm_req_comps
 from serializers import marcar_permissoes_reserva as marcar_perm_reserva
@@ -496,6 +498,180 @@ def buscar_requisicoes_computadores_relatorio(
     )
 
 
+def montar_dados_relatorio_geral():
+    data_hoje = date.today().isoformat()
+    data_inicial = request.args.get("data_inicial") or data_hoje
+    data_final = request.args.get("data_final") or data_inicial
+    sigla = normalizar_sigla_professor(request.args.get("sigla", ""))
+    nivel = request.args.get("nivel", "")
+    recurso = request.args.get("recurso", "")
+    mensagem = request.args.get("mensagem")
+    tipo_mensagem = request.args.get("tipo", "success")
+
+    try:
+        date.fromisoformat(data_inicial)
+        date.fromisoformat(data_final)
+    except ValueError:
+        data_inicial = data_hoje
+        data_final = data_hoje
+        mensagem = "Per\u00edodo inv\u00e1lido. O relat\u00f3rio foi ajustado para a data de hoje."
+        tipo_mensagem = "warning"
+
+    if data_inicial > data_final:
+        data_inicial, data_final = data_final, data_inicial
+        mensagem = (
+            "A data inicial era maior que a final. O per\u00edodo foi ajustado automaticamente."
+        )
+        tipo_mensagem = "warning"
+
+    if nivel and nivel not in SALAS:
+        nivel = ""
+        mensagem = "Filtro de n\u00edvel inv\u00e1lido. Exibindo todos os n\u00edveis."
+        tipo_mensagem = "warning"
+
+    if recurso and recurso != "projetor" and recurso not in RECURSOS_COMPUTADORES:
+        recurso = ""
+        mensagem = "Filtro de recurso inv\u00e1lido. Exibindo todos os recursos."
+        tipo_mensagem = "warning"
+
+    reservas = []
+    requisicoes = []
+
+    if recurso in ("", "projetor"):
+        reservas = buscar_reservas_relatorio(
+            data_inicial,
+            data_final,
+            nivel=nivel,
+            sigla=sigla,
+        )
+
+    if recurso != "projetor":
+        requisicoes = buscar_requisicoes_computadores_relatorio(
+            data_inicial,
+            data_final,
+            nivel=nivel,
+            sigla=sigla,
+            recurso=recurso,
+        )
+
+    reservas = marcar_permissoes_reservas(reservas)
+    requisicoes = marcar_permissoes_requisicoes_computadores(requisicoes)
+    registros = montar_registros_relatorio_geral(reservas, requisicoes)
+    relatorio = montar_relatorio_geral_ti(registros)
+
+    return {
+        "reservas": reservas,
+        "requisicoes": requisicoes,
+        "registros": registros,
+        "relatorio": relatorio,
+        "data_inicial": data_inicial,
+        "data_final": data_final,
+        "sigla": sigla,
+        "nivel": nivel,
+        "recurso": recurso,
+        "niveis": NIVEL_LABELS,
+        "recursos_computadores": RECURSOS_COMPUTADORES,
+        "mensagem": mensagem,
+        "tipo_mensagem": tipo_mensagem,
+    }
+
+
+def normalizar_hora_teste_monitor(valor):
+    valor = (valor or "").strip()
+    if not valor:
+        return ""
+
+    for formato in ("%H:%M", "%H%M"):
+        try:
+            hora = datetime.strptime(valor, formato)
+            return hora.strftime("%H:%M")
+        except ValueError:
+            continue
+
+    return ""
+
+
+def marcar_proximo_horario_monitor(tarefas, data_filtro, hora_teste=""):
+    for tarefa in tarefas:
+        tarefa["destaque_proximo"] = False
+
+    if data_filtro != date.today().isoformat() and not hora_teste:
+        return ""
+
+    if hora_teste:
+        hora_simulada = datetime.strptime(hora_teste, "%H:%M")
+        minuto_atual = hora_simulada.hour * 60 + hora_simulada.minute
+    else:
+        agora = datetime.now()
+        minuto_atual = agora.hour * 60 + agora.minute
+
+    proximos = [
+        tarefa["ordem"]
+        for tarefa in tarefas
+        if tarefa.get("ordem") is not None and tarefa["ordem"] >= minuto_atual
+    ]
+
+    if not proximos:
+        return ""
+
+    proximo_horario = min(proximos)
+    for tarefa in tarefas:
+        tarefa["destaque_proximo"] = tarefa.get("ordem") == proximo_horario
+
+    return f"{proximo_horario // 60:02d}:{proximo_horario % 60:02d}"
+
+
+def montar_dados_operacionais_ti(data_filtro):
+    hora_teste = normalizar_hora_teste_monitor(request.args.get("hora_teste", ""))
+    reservas, disponibilidade = buscar_reservas_por_data(data_filtro)
+    reservas = marcar_permissoes_reservas(reservas)
+    painel = montar_painel_disponibilidade(disponibilidade)
+    planejamento = gerar_planejamento_ti(reservas)
+    tarefas_do_dia = montar_tarefas_do_dia(planejamento)
+    requisicoes_computadores, disponibilidade_computadores = (
+        buscar_requisicoes_computadores_por_data(data_filtro)
+    )
+    requisicoes_computadores = marcar_permissoes_requisicoes_computadores(
+        requisicoes_computadores
+    )
+    painel_computadores = montar_painel_disponibilidade_computadores(
+        disponibilidade_computadores
+    )
+    tarefas_computadores = montar_tarefas_computadores(requisicoes_computadores)
+
+    if tarefas_computadores:
+        tarefas_do_dia = sorted(
+            tarefas_do_dia + tarefas_computadores,
+            key=lambda tarefa: (
+                tarefa["ordem"],
+                tarefa.get("tipo", ""),
+                tarefa.get("nivel_label", ""),
+                tarefa.get("descricao", ""),
+            ),
+        )
+
+    proximo_horario_monitor = marcar_proximo_horario_monitor(
+        tarefas_do_dia,
+        data_filtro,
+        hora_teste,
+    )
+
+    return {
+        "reservas": reservas,
+        "painel": painel,
+        "planejamento": planejamento,
+        "tarefas_do_dia": tarefas_do_dia,
+        "requisicoes_computadores": requisicoes_computadores,
+        "painel_computadores": painel_computadores,
+        "data_selecionada": data_filtro,
+        "data_hoje": date.today().isoformat(),
+        "hora_teste": hora_teste,
+        "proximo_horario_monitor": proximo_horario_monitor,
+        "mensagem": request.args.get("mensagem"),
+        "tipo_mensagem": request.args.get("tipo", "success"),
+    }
+
+
 @app.context_processor
 def injetar_usuario():
     tipo = session.get("usuario_tipo")
@@ -701,6 +877,68 @@ def home():
         data_hoje=date.today().isoformat(),
         mensagem=request.args.get("mensagem"),
         tipo_mensagem=request.args.get("tipo", "warning"),
+    )
+
+
+@app.route("/manual")
+@login_obrigatorio
+def manual():
+    return render_template(
+        "manual.html",
+        data_hoje=date.today().isoformat(),
+    )
+
+
+@app.route("/minhas-reservas")
+@login_obrigatorio
+def minhas_reservas():
+    hoje = date.today()
+    data_inicial = request.args.get("data_inicial") or hoje.isoformat()
+    data_final = request.args.get("data_final") or (hoje + timedelta(days=60)).isoformat()
+    sigla = session.get("usuario_sigla")
+    mensagem = request.args.get("mensagem")
+    tipo_mensagem = request.args.get("tipo", "success")
+
+    try:
+        date.fromisoformat(data_inicial)
+        date.fromisoformat(data_final)
+    except ValueError:
+        data_inicial = hoje.isoformat()
+        data_final = (hoje + timedelta(days=60)).isoformat()
+        mensagem = "Per\u00edodo inv\u00e1lido. A consulta foi ajustada para as pr\u00f3ximas reservas."
+        tipo_mensagem = "warning"
+
+    if data_inicial > data_final:
+        data_inicial, data_final = data_final, data_inicial
+        mensagem = (
+            "A data inicial era maior que a final. O per\u00edodo foi ajustado automaticamente."
+        )
+        tipo_mensagem = "warning"
+
+    reservas = buscar_reservas_relatorio(
+        data_inicial,
+        data_final,
+        sigla=sigla,
+    )
+    requisicoes = buscar_requisicoes_computadores_relatorio(
+        data_inicial,
+        data_final,
+        sigla=sigla,
+    )
+    reservas = marcar_permissoes_reservas(reservas)
+    requisicoes = marcar_permissoes_requisicoes_computadores(requisicoes)
+    registros = montar_registros_relatorio_geral(reservas, requisicoes)
+    relatorio = montar_relatorio_geral_ti(registros)
+
+    return render_template(
+        "minhas_reservas.html",
+        registros=registros,
+        relatorio=relatorio,
+        data_inicial=data_inicial,
+        data_final=data_final,
+        data_hoje=hoje.isoformat(),
+        mensagem=mensagem,
+        tipo_mensagem=tipo_mensagem,
     )
 
 
@@ -1123,72 +1361,47 @@ def excluir_reserva(reserva_id):
 @ti_obrigatorio
 def painel_ti():
     data_filtro = request.args.get("data") or date.today().isoformat()
-    reservas, disponibilidade = buscar_reservas_por_data(data_filtro)
-    reservas = marcar_permissoes_reservas(reservas)
-    painel = montar_painel_disponibilidade(disponibilidade)
-    planejamento = gerar_planejamento_ti(reservas)
-    tarefas_do_dia = montar_tarefas_do_dia(planejamento)
+    dados = montar_dados_operacionais_ti(data_filtro)
 
     return render_template(
         "painel_ti.html",
-        reservas=reservas,
-        painel=painel,
-        planejamento=planejamento,
-        tarefas_do_dia=tarefas_do_dia,
-        data_selecionada=data_filtro,
-        data_hoje=date.today().isoformat(),
-        mensagem=request.args.get("mensagem"),
-        tipo_mensagem=request.args.get("tipo", "success"),
+        **dados,
+    )
+
+
+@app.route("/monitor-ti")
+@ti_obrigatorio
+def monitor_ti():
+    data_filtro = request.args.get("data") or date.today().isoformat()
+    return render_template(
+        "monitor_ti.html",
+        **montar_dados_operacionais_ti(data_filtro),
     )
 
 
 @app.route("/relatorio-ti")
 @ti_obrigatorio
 def relatorio_ti():
-    data_hoje = date.today().isoformat()
-    data_inicial = request.args.get("data_inicial") or data_hoje
-    data_final = request.args.get("data_final") or data_inicial
-    sigla = normalizar_sigla_professor(request.args.get("sigla", ""))
-    nivel = request.args.get("nivel", "")
-    mensagem = request.args.get("mensagem")
-    tipo_mensagem = request.args.get("tipo", "success")
-
-    try:
-        date.fromisoformat(data_inicial)
-        date.fromisoformat(data_final)
-    except ValueError:
-        data_inicial = data_hoje
-        data_final = data_hoje
-        mensagem = "Per\u00edodo inv\u00e1lido. O relat\u00f3rio foi ajustado para a data de hoje."
-        tipo_mensagem = "warning"
-
-    if data_inicial > data_final:
-        data_inicial, data_final = data_final, data_inicial
-        mensagem = (
-            "A data inicial era maior que a final. O per\u00edodo foi ajustado automaticamente."
-        )
-        tipo_mensagem = "warning"
-
-    if nivel and nivel not in SALAS:
-        nivel = ""
-        mensagem = "Filtro de n\u00edvel inv\u00e1lido. Exibindo todos os n\u00edveis."
-        tipo_mensagem = "warning"
-
-    reservas = buscar_reservas_relatorio(data_inicial, data_final, nivel=nivel, sigla=sigla)
-    reservas = marcar_permissoes_reservas(reservas)
-    relatorio = montar_relatorio_ti(reservas)
-
     return render_template(
         "relatorio_ti.html",
-        reservas=reservas,
-        relatorio=relatorio,
-        data_inicial=data_inicial,
-        data_final=data_final,
-        sigla=sigla,
-        nivel=nivel,
-        niveis=NIVEL_LABELS,
-        mensagem=mensagem,
-        tipo_mensagem=tipo_mensagem,
+        **montar_dados_relatorio_geral(),
+    )
+
+
+@app.route("/relatorio-ti/exportar-excel")
+@ti_obrigatorio
+def exportar_relatorio_ti_excel():
+    dados = montar_dados_relatorio_geral()
+    arquivo = gerar_xlsx_relatorio_geral_ti(dados["registros"], dados["relatorio"])
+    nome = (
+        "relatorio_equipamentos_"
+        f"{dados['data_inicial']}_a_{dados['data_final']}.xlsx"
+    )
+    return send_file(
+        arquivo,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=nome,
     )
 
 
@@ -1393,57 +1606,19 @@ def relatorio_computadores_ti():
     nivel = request.args.get("nivel", "")
     recurso = request.args.get("recurso", "")
     mensagem = request.args.get("mensagem")
-    tipo_mensagem = request.args.get("tipo", "success")
+    tipo = request.args.get("tipo", "success")
 
-    try:
-        date.fromisoformat(data_inicial)
-        date.fromisoformat(data_final)
-    except ValueError:
-        data_inicial = data_hoje
-        data_final = data_hoje
-        mensagem = "Per\u00edodo inv\u00e1lido. O relat\u00f3rio foi ajustado para a data de hoje."
-        tipo_mensagem = "warning"
-
-    if data_inicial > data_final:
-        data_inicial, data_final = data_final, data_inicial
-        mensagem = (
-            "A data inicial era maior que a final. O per\u00edodo foi ajustado automaticamente."
+    return redirect(
+        url_for(
+            "relatorio_ti",
+            data_inicial=data_inicial,
+            data_final=data_final,
+            sigla=sigla,
+            nivel=nivel,
+            recurso=recurso,
+            mensagem=mensagem,
+            tipo=tipo,
         )
-        tipo_mensagem = "warning"
-
-    if nivel and nivel not in SALAS:
-        nivel = ""
-        mensagem = "Filtro de n\u00edvel inv\u00e1lido. Exibindo todos os n\u00edveis."
-        tipo_mensagem = "warning"
-
-    if recurso and recurso not in RECURSOS_COMPUTADORES:
-        recurso = ""
-        mensagem = "Filtro de recurso inv\u00e1lido. Exibindo todos os recursos."
-        tipo_mensagem = "warning"
-
-    requisicoes = buscar_requisicoes_computadores_relatorio(
-        data_inicial,
-        data_final,
-        nivel=nivel,
-        sigla=sigla,
-        recurso=recurso,
-    )
-    requisicoes = marcar_permissoes_requisicoes_computadores(requisicoes)
-    relatorio = montar_relatorio_computadores_ti(requisicoes)
-
-    return render_template(
-        "relatorio_computadores_ti.html",
-        requisicoes=requisicoes,
-        relatorio=relatorio,
-        data_inicial=data_inicial,
-        data_final=data_final,
-        sigla=sigla,
-        nivel=nivel,
-        recurso=recurso,
-        niveis=NIVEL_LABELS,
-        recursos_computadores=RECURSOS_COMPUTADORES,
-        mensagem=mensagem,
-        tipo_mensagem=tipo_mensagem,
     )
 
 
