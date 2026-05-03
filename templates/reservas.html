@@ -17,11 +17,9 @@
     <aside class="link-row user-links">
         <span class="status-chip info">{{ usuario_tipo_label }}: {{ usuario_sigla }}</span>
         <a class="page-link" href="/">Nova reserva</a>
-        <a class="page-link" href="/computadores">Solicitar computadores</a>
-        <a class="page-link" href="/computadores/consultar?data={{ data_selecionada }}">Consultar computadores</a>
+        <a class="page-link" href="/minhas-reservas">Minhas reservas</a>
         {% if usuario_eh_ti %}
-        <a class="page-link" href="/painel-ti?data={{ data_selecionada }}">Painel da TI</a>
-        <a class="page-link" href="/relatorio-ti?data_inicial={{ data_selecionada }}&data_final={{ data_selecionada }}">Relat&oacute;rio TI</a>
+        <a class="page-link" href="/monitor-ti?data={{ data_selecionada }}">Monitor da TI</a>
         <a class="page-link" href="/relatorio-ti?data_inicial={{ data_selecionada }}&data_final={{ data_selecionada }}">Relat&oacute;rio Geral</a>
         <a class="page-link" href="/usuarios">Gerenciar acessos</a>
         {% endif %}
@@ -122,7 +120,7 @@
 
     <div class="link-row">
         <a class="page-link" href="/">Voltar para nova reserva</a>
-        <a class="page-link" href="/computadores">Ir para computadores</a>
+        <a class="page-link" href="/">Ir para nova reserva</a>
     </div>
 </div>
 

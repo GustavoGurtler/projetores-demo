@@ -48,3 +48,21 @@ def test_rota_antiga_de_relatorio_de_computadores_redireciona(tmp_path, monkeypa
 
     assert resposta.status_code == 302
     assert resposta.headers["Location"].startswith("/relatorio-ti")
+
+
+def test_telas_antigas_redirecionam_para_fluxo_consolidado(tmp_path, monkeypatch):
+    app = carregar_app_demo(tmp_path, monkeypatch)
+    client = app.app.test_client()
+
+    client.post("/login", data={"sigla": "TEC", "senha": "admin123"})
+
+    computadores = client.get("/computadores?mensagem=teste")
+    consulta = client.get("/computadores/consultar?data=2026-05-04")
+    painel = client.get("/painel-ti?data=2026-05-04")
+
+    assert computadores.status_code == 302
+    assert computadores.headers["Location"].startswith("/?mensagem=teste")
+    assert consulta.status_code == 302
+    assert consulta.headers["Location"].startswith("/relatorio-ti")
+    assert painel.status_code == 302
+    assert painel.headers["Location"] == "/monitor-ti?data=2026-05-04"

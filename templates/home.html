@@ -15,11 +15,8 @@
     <a class="page-link" href="/minhas-reservas">Minhas reservas</a>
     <a class="page-link" href="/reservas?data={{ data_hoje }}">Ver reservas do dia</a>
     <a class="page-link" href="/manual">Manual do professor</a>
-    <a class="page-link" href="/computadores">Solicitar computadores</a>
-    <a class="page-link" href="/computadores/consultar?data={{ data_hoje }}">Consultar computadores</a>
     {% if usuario_eh_ti %}
     <a class="page-link" href="/monitor-ti?data={{ data_hoje }}">Monitor da TI</a>
-    <a class="page-link" href="/painel-ti?data={{ data_hoje }}">Painel da TI</a>
     <a class="page-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">Relat&oacute;rio Geral</a>
     <a class="page-link" href="/usuarios">Gerenciar acessos</a>
     {% endif %}
@@ -123,7 +120,7 @@
 <div class="internal-access">
     <p class="subtle">
         Uso interno da equipe de TI:
-        <a class="page-link subtle-link" href="/painel-ti?data={{ data_hoje }}">abrir painel operacional</a>
+        <a class="page-link subtle-link" href="/monitor-ti?data={{ data_hoje }}">abrir monitor operacional</a>
         |
         <a class="page-link subtle-link" href="/relatorio-ti?data_inicial={{ data_hoje }}&data_final={{ data_hoje }}">abrir relat&oacute;rio</a>
         |

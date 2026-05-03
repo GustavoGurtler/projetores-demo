@@ -714,13 +714,13 @@ def login():
             return redirect(proximo)
 
         if usuario["tipo"] == "ti":
-            return redirect(url_for("painel_ti"))
+            return redirect(url_for("monitor_ti"))
 
         return redirect(url_for("home"))
 
     if session.get("usuario_sigla"):
         if session.get("usuario_tipo") == "ti":
-            return redirect(url_for("painel_ti"))
+            return redirect(url_for("monitor_ti"))
         return redirect(url_for("home"))
 
     return render_template(
@@ -945,18 +945,7 @@ def minhas_reservas():
 @app.route("/computadores")
 @login_obrigatorio
 def home_computadores():
-    disponibilidade, locais_ocupados = buscar_disponibilidade_computadores_geral()
-    return render_template(
-        "computadores.html",
-        dados=disponibilidade,
-        locais_ocupados=locais_ocupados,
-        recursos_computadores=RECURSOS_COMPUTADORES,
-        salas=SALAS,
-        horarios=HORARIOS,
-        data_hoje=date.today().isoformat(),
-        mensagem=request.args.get("mensagem"),
-        tipo_mensagem=request.args.get("tipo", "warning"),
-    )
+    return redirect(url_for("home", **request.args.to_dict(flat=True)))
 
 
 @app.route("/computadores/solicitar", methods=["POST"])
@@ -980,7 +969,7 @@ def solicitar_computadores():
     if erro_validacao:
         return redirect(
             url_for(
-                "home_computadores",
+                "home",
                 mensagem=erro_validacao,
                 tipo="warning",
             )
@@ -989,7 +978,7 @@ def solicitar_computadores():
     if not aulas:
         return redirect(
             url_for(
-                "home_computadores",
+                "home",
                 mensagem="Selecione pelo menos uma aula para solicitar os computadores.",
                 tipo="warning",
             )
@@ -1018,8 +1007,9 @@ def solicitar_computadores():
 
     return redirect(
         url_for(
-            "ver_requisicoes_computadores",
-            data=data_requisicao,
+            "relatorio_ti",
+            data_inicial=data_requisicao,
+            data_final=data_requisicao,
             mensagem=" ".join(mensagens),
             tipo=tipo,
         )
@@ -1030,18 +1020,14 @@ def solicitar_computadores():
 @login_obrigatorio
 def ver_requisicoes_computadores():
     data_filtro = request.args.get("data") or date.today().isoformat()
-    requisicoes, disponibilidade = buscar_requisicoes_computadores_por_data(data_filtro)
-    requisicoes = marcar_permissoes_requisicoes_computadores(requisicoes)
-    painel = montar_painel_disponibilidade_computadores(disponibilidade)
-
-    return render_template(
-        "computadores_consulta.html",
-        requisicoes=requisicoes,
-        painel=painel,
-        data_selecionada=data_filtro,
-        data_hoje=date.today().isoformat(),
-        mensagem=request.args.get("mensagem"),
-        tipo_mensagem=request.args.get("tipo", "success"),
+    return redirect(
+        url_for(
+            "relatorio_ti",
+            data_inicial=data_filtro,
+            data_final=data_filtro,
+            mensagem=request.args.get("mensagem"),
+            tipo=request.args.get("tipo", "success"),
+        )
     )
 
 
@@ -1361,12 +1347,7 @@ def excluir_reserva(reserva_id):
 @ti_obrigatorio
 def painel_ti():
     data_filtro = request.args.get("data") or date.today().isoformat()
-    dados = montar_dados_operacionais_ti(data_filtro)
-
-    return render_template(
-        "painel_ti.html",
-        **dados,
-    )
+    return redirect(url_for("monitor_ti", data=data_filtro))
 
 
 @app.route("/monitor-ti")
@@ -1414,19 +1395,21 @@ def editar_requisicao_computador(requisicao_id):
     if not requisicao:
         return redirecionar_com_mensagem(
             proximo,
-            "ver_requisicoes_computadores",
+            "relatorio_ti",
             "Requisi\u00e7\u00e3o de computadores n\u00e3o encontrada.",
             "warning",
-            data=date.today().isoformat(),
+            data_inicial=date.today().isoformat(),
+            data_final=date.today().isoformat(),
         )
 
     if not usuario_pode_gerenciar_por_sigla(requisicao["sigla"]):
         return redirecionar_com_mensagem(
             proximo,
-            "ver_requisicoes_computadores",
+            "relatorio_ti",
             "Voc\u00ea n\u00e3o tem permiss\u00e3o para editar esta requisi\u00e7\u00e3o.",
             "warning",
-            data=requisicao["data"],
+            data_inicial=requisicao["data"],
+            data_final=requisicao["data"],
         )
 
     requisicao = marcar_permissoes_requisicao_computador(requisicao)
@@ -1515,10 +1498,11 @@ def editar_requisicao_computador(requisicao_id):
 
                 return redirecionar_com_mensagem(
                     proximo,
-                    "ver_requisicoes_computadores",
+                    "relatorio_ti",
                     "Requisi\u00e7\u00e3o de computadores atualizada com sucesso.",
                     "success",
-                    data=dados_formulario["data"],
+                    data_inicial=dados_formulario["data"],
+                    data_final=dados_formulario["data"],
                 )
 
             conn.close()
@@ -1538,8 +1522,9 @@ def editar_requisicao_computador(requisicao_id):
         tipo_mensagem=tipo_mensagem,
         proximo=destino_seguro(
             proximo,
-            "ver_requisicoes_computadores",
-            data=requisicao["data"],
+            "relatorio_ti",
+            data_inicial=requisicao["data"],
+            data_final=requisicao["data"],
         ),
     )
 
@@ -1553,19 +1538,21 @@ def excluir_requisicao_computador(requisicao_id):
     if not requisicao:
         return redirecionar_com_mensagem(
             proximo,
-            "ver_requisicoes_computadores",
+            "relatorio_ti",
             "Requisi\u00e7\u00e3o de computadores n\u00e3o encontrada.",
             "warning",
-            data=date.today().isoformat(),
+            data_inicial=date.today().isoformat(),
+            data_final=date.today().isoformat(),
         )
 
     if not usuario_pode_gerenciar_por_sigla(requisicao["sigla"]):
         return redirecionar_com_mensagem(
             proximo,
-            "ver_requisicoes_computadores",
+            "relatorio_ti",
             "Voc\u00ea n\u00e3o tem permiss\u00e3o para excluir esta requisi\u00e7\u00e3o.",
             "warning",
-            data=requisicao["data"],
+            data_inicial=requisicao["data"],
+            data_final=requisicao["data"],
         )
 
     conn = conectar()
@@ -1582,7 +1569,7 @@ def excluir_requisicao_computador(requisicao_id):
 
     return redirecionar_com_mensagem(
         proximo,
-        "ver_requisicoes_computadores",
+        "relatorio_ti",
         (
             (
                 f"Requisi\u00e7\u00e3o de {requisicao['quantidade']} unidade(s) de "
@@ -1592,7 +1579,8 @@ def excluir_requisicao_computador(requisicao_id):
             else f"Reserva de {requisicao['recurso_label']} exclu\u00edda com sucesso."
         ),
         "success",
-        data=requisicao["data"],
+        data_inicial=requisicao["data"],
+        data_final=requisicao["data"],
     )
 
 
