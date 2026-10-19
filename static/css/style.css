@@ -927,3 +927,72 @@ tr:last-child td {
         grid-template-columns: 1fr;
     }
 }
+
+
+/* Login: mensagem à esquerda e card à direita */
+.login-page {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 48px;
+    min-height: calc(100vh - 40px);
+    width: 92%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 0;
+    box-sizing: border-box;
+}
+
+.login-hero {
+    flex: 1;
+    max-width: 520px;
+}
+
+.login-kicker {
+    margin: 0 0 12px;
+    color: #67e8f9;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+}
+
+.login-title {
+    margin: 0 0 16px;
+    text-align: left;
+    font-size: clamp(2.2rem, 4vw, 3.4rem);
+    line-height: 1.1;
+    color: #67e8f9;
+}
+
+.login-lead {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #cbd5e1;
+}
+
+.login-card {
+    flex: 0 0 420px;
+    margin: 0;
+    max-width: 420px;
+}
+
+@media (max-width: 860px) {
+    .login-page {
+        flex-direction: column;
+        justify-content: center;
+        gap: 28px;
+        padding: 24px 0;
+    }
+
+    .login-hero,
+    .login-card {
+        flex: none;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .login-title {
+        text-align: center;
+    }
+}
