@@ -1,4 +1,5 @@
 import os
+import secrets
 
 from dotenv import load_dotenv
 
@@ -7,7 +8,9 @@ load_dotenv()
 
 
 class Config:
-    SECRET_KEY = os.environ.get("APP_SECRET_KEY", "reservas-projetor-dev-secret")
+    # Sem APP_SECRET_KEY definida, gera uma chave aleatória a cada início
+    # (as sessões são perdidas ao reiniciar, o que é aceitável na demo).
+    SECRET_KEY = os.environ.get("APP_SECRET_KEY") or secrets.token_hex(32)
     DATABASE_PATH = os.environ.get("DATABASE_PATH", "reservas.db")
     DEMO_DATA_ENABLED = os.environ.get("DEMO_DATA_ENABLED", "1").lower() in {
         "1",
